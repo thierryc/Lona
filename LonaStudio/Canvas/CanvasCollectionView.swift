@@ -125,15 +125,13 @@ class CanvasCollectionView: NSView, NSCollectionViewDataSource, NSCollectionView
     func numberOfSections(in collectionView: NSCollectionView) -> Int {
         guard let options = options else { return 0 }
         let count = options.layout == .caseXcanvasY ? computedCanvases.count : computedCases.count
-//        Swift.print("Sections", count)
-        return count
+        return min(count, 50)
     }
     
     func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int {
         guard let options = options else { return 0 }
         let count = options.layout == .caseXcanvasY ? computedCases.count : computedCanvases.count
-//        Swift.print("Items per section", count)
-        return count
+        return min(count, 50)
     }
     
     func measureCanvas(sizeForItemAt indexPath: IndexPath) -> NSSize {
