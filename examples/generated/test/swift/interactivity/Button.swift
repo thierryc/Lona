@@ -7,8 +7,9 @@ public class Button: UIView {
 
   // MARK: Lifecycle
 
-  public init(label: String) {
+  public init(label: String, secondary: Bool) {
     self.label = label
+    self.secondary = secondary
 
     super.init(frame: .zero)
 
@@ -19,7 +20,7 @@ public class Button: UIView {
   }
 
   public convenience init() {
-    self.init(label: "")
+    self.init(label: "", secondary: false)
   }
 
   public required init?(coder aDecoder: NSCoder) {
@@ -30,6 +31,7 @@ public class Button: UIView {
 
   public var label: String { didSet { update() } }
   public var onTap: (() -> Void)? { didSet { update() } }
+  public var secondary: Bool { didSet { update() } }
 
   // MARK: Private
 
@@ -37,24 +39,9 @@ public class Button: UIView {
 
   private var textViewTextStyle = TextStyles.button
 
-  private var topPadding: CGFloat = 12
-  private var trailingPadding: CGFloat = 16
-  private var bottomPadding: CGFloat = 12
-  private var leadingPadding: CGFloat = 16
-  private var textViewTopMargin: CGFloat = 0
-  private var textViewTrailingMargin: CGFloat = 0
-  private var textViewBottomMargin: CGFloat = 0
-  private var textViewLeadingMargin: CGFloat = 0
-
   private var hovered = false
   private var pressed = false
   private var onPress: (() -> Void)?
-
-  private var textViewWidthAnchorParentConstraint: NSLayoutConstraint?
-  private var textViewTopAnchorConstraint: NSLayoutConstraint?
-  private var textViewBottomAnchorConstraint: NSLayoutConstraint?
-  private var textViewLeadingAnchorConstraint: NSLayoutConstraint?
-  private var textViewTrailingAnchorConstraint: NSLayoutConstraint?
 
   private func setUpViews() {
     textView.numberOfLines = 0
@@ -71,21 +58,11 @@ public class Button: UIView {
 
     let textViewWidthAnchorParentConstraint = textView
       .widthAnchor
-      .constraint(
-        lessThanOrEqualTo: widthAnchor,
-        constant: -(leadingPadding + textViewLeadingMargin + trailingPadding + textViewTrailingMargin))
-    let textViewTopAnchorConstraint = textView
-      .topAnchor
-      .constraint(equalTo: topAnchor, constant: topPadding + textViewTopMargin)
-    let textViewBottomAnchorConstraint = textView
-      .bottomAnchor
-      .constraint(equalTo: bottomAnchor, constant: -(bottomPadding + textViewBottomMargin))
-    let textViewLeadingAnchorConstraint = textView
-      .leadingAnchor
-      .constraint(equalTo: leadingAnchor, constant: leadingPadding + textViewLeadingMargin)
-    let textViewTrailingAnchorConstraint = textView
-      .trailingAnchor
-      .constraint(equalTo: trailingAnchor, constant: -(trailingPadding + textViewTrailingMargin))
+      .constraint(lessThanOrEqualTo: widthAnchor, constant: -32)
+    let textViewTopAnchorConstraint = textView.topAnchor.constraint(equalTo: topAnchor, constant: 12)
+    let textViewBottomAnchorConstraint = textView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12)
+    let textViewLeadingAnchorConstraint = textView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16)
+    let textViewTrailingAnchorConstraint = textView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16)
 
     textViewWidthAnchorParentConstraint.priority = UILayoutPriority.defaultLow
 
@@ -96,19 +73,6 @@ public class Button: UIView {
       textViewLeadingAnchorConstraint,
       textViewTrailingAnchorConstraint
     ])
-
-    self.textViewWidthAnchorParentConstraint = textViewWidthAnchorParentConstraint
-    self.textViewTopAnchorConstraint = textViewTopAnchorConstraint
-    self.textViewBottomAnchorConstraint = textViewBottomAnchorConstraint
-    self.textViewLeadingAnchorConstraint = textViewLeadingAnchorConstraint
-    self.textViewTrailingAnchorConstraint = textViewTrailingAnchorConstraint
-
-    // For debugging
-    textViewWidthAnchorParentConstraint.identifier = "textViewWidthAnchorParentConstraint"
-    textViewTopAnchorConstraint.identifier = "textViewTopAnchorConstraint"
-    textViewBottomAnchorConstraint.identifier = "textViewBottomAnchorConstraint"
-    textViewLeadingAnchorConstraint.identifier = "textViewLeadingAnchorConstraint"
-    textViewTrailingAnchorConstraint.identifier = "textViewTrailingAnchorConstraint"
   }
 
   private func update() {
@@ -120,6 +84,9 @@ public class Button: UIView {
     }
     if pressed {
       backgroundColor = Colors.blue50
+    }
+    if secondary {
+      backgroundColor = Colors.lightblue100
     }
   }
 }

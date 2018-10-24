@@ -3,29 +3,39 @@ import { Text, View, StyleSheet, TextStyles } from
   "@mathieudutour/react-sketchapp"
 
 import colors from "../colors"
+import shadows from "../shadows"
 import textStyles from "../textStyles"
 
 export default class PressableRootView extends React.Component {
   render() {
-    let Outer$onPress
-    let Outer$backgroundColor
-    let Inner$onPress
-    let Inner$backgroundColor
+
     let InnerText$text
+    let Inner$backgroundColor
+    let Inner$hovered
+    let Inner$onPress
+    let Inner$pressed
+    let Outer$backgroundColor
+    let Outer$hovered
+    let Outer$onPress
+    let Outer$pressed
+    Inner$backgroundColor = colors.blue500
+    InnerText$text = ""
+    Outer$backgroundColor = colors.grey50
+
     Outer$onPress = this.props.onPressOuter
     Inner$onPress = this.props.onPressInner
     if (Outer$hovered) {
-      Outer$backgroundColor = "grey100"
+      Outer$backgroundColor = colors.grey100
     }
     if (Outer$pressed) {
-      Outer$backgroundColor = "grey300"
+      Outer$backgroundColor = colors.grey300
     }
     if (Inner$hovered) {
-      Inner$backgroundColor = "blue300"
+      Inner$backgroundColor = colors.blue300
       InnerText$text = "Hovered"
     }
     if (Inner$pressed) {
-      Inner$backgroundColor = "blue800"
+      Inner$backgroundColor = colors.blue800
       InnerText$text = "Pressed"
     }
     if (Inner$hovered) {
@@ -42,7 +52,7 @@ export default class PressableRootView extends React.Component {
           style={[ styles.inner, { backgroundColor: Inner$backgroundColor } ]}
           onPress={Inner$onPress}
         >
-          <Text style={[ styles.innerText, {} ]} text={InnerText$text}>
+          <Text style={styles.innerText}>
             {InnerText$text}
           </Text>
         </View>
@@ -53,13 +63,30 @@ export default class PressableRootView extends React.Component {
 
 let styles = StyleSheet.create({
   outer: {
+    alignItems: "flex-start",
     alignSelf: "stretch",
     backgroundColor: colors.grey50,
+    flex: 0,
+    flexDirection: "column",
+    justifyContent: "flex-start",
     paddingTop: 24,
     paddingRight: 24,
     paddingBottom: 24,
     paddingLeft: 24
   },
-  inner: { backgroundColor: colors.blue500, width: 100, height: 100 },
-  innerText: { ...TextStyles.get("headline") }
+  inner: {
+    alignItems: "flex-start",
+    backgroundColor: colors.blue500,
+    flexDirection: "column",
+    justifyContent: "flex-start",
+    width: 100,
+    height: 100
+  },
+  innerText: {
+    ...TextStyles.get("headline"),
+    alignItems: "flex-start",
+    flex: 0,
+    flexDirection: "column",
+    justifyContent: "flex-start"
+  }
 })

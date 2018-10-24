@@ -10,6 +10,9 @@ import AppKit
 
 enum Generated: String {
     case localAsset = "Local Asset"
+    case vectorAsset = "Vector Asset"
+    case vectorLogicActive = "Vector Logic - Active"
+    case vectorLogicInactive = "Vector Logic - Inactive"
     case nestedComponent = "Nested Component"
     case nestedButtons = "Nested Buttons"
     case button = "Button"
@@ -27,10 +30,18 @@ enum Generated: String {
     case textStyleConditionalFalse = "Text Style Conditional - False"
     case textStylesTest = "Text Styles Test"
     case textAlignment = "Text Alignment"
+    case boxModelConditionalSmall = "Box Model Conditional Small"
+    case boxModelConditionalLarge = "Box Model Conditional Large"
+    case shadowsTest = "Shadow Test"
+    case visibilityTest = "Visibility Test"
+    case optionals = "Optionals"
 
     static func allValues() -> [Generated] {
         return [
             localAsset,
+            vectorAsset,
+            vectorLogicActive,
+            vectorLogicInactive,
             nestedComponent,
             nestedButtons,
             button,
@@ -48,6 +59,11 @@ enum Generated: String {
             textStyleConditionalFalse,
             textStylesTest,
             textAlignment,
+            boxModelConditionalSmall,
+            boxModelConditionalLarge,
+            shadowsTest,
+            visibilityTest,
+            optionals,
         ]
     }
 
@@ -61,7 +77,7 @@ enum Generated: String {
             return NestedButtons()
         case .button:
             var count = 0
-            let button = Button(label: "Tapped \(count)")
+            let button = Button(label: "Tapped \(count)", secondary: false)
             button.onTap = {
                 count += 1
                 button.label = "Tapped \(count)"
@@ -86,7 +102,7 @@ enum Generated: String {
         case .ifDisabled:
             return If(enabled: false)
         case .borderWidthColor:
-            return BorderWidthColor()
+            return BorderWidthColor(alternativeStyle: true)
         case .textStyleConditionalTrue:
             return TextStyleConditional(large: true)
         case .textStyleConditionalFalse:
@@ -95,6 +111,22 @@ enum Generated: String {
             return TextStylesTest()
         case .textAlignment:
             return TextAlignment()
+        case .boxModelConditionalSmall:
+            return BoxModelConditional(margin: 4, size: 60)
+        case .boxModelConditionalLarge:
+            return BoxModelConditional(margin: 20, size: 120)
+        case .shadowsTest:
+            return ShadowsTest()
+        case .visibilityTest:
+            return VisibilityTest(enabled: true)
+        case .optionals:
+          return Optionals(boolParam: true, stringParam: "Hello World")
+        case .vectorAsset:
+          return VectorAsset()
+        case .vectorLogicActive:
+          return VectorLogic(active: true)
+        case .vectorLogicInactive:
+            return VectorLogic(active: false)
         }
     }
 
@@ -115,7 +147,15 @@ enum Generated: String {
              .secondaryAxis,
              .borderWidthColor,
              .textAlignment,
-             .fitContentParentSecondaryChildren:
+             .fitContentParentSecondaryChildren,
+             .boxModelConditionalSmall,
+             .boxModelConditionalLarge,
+             .shadowsTest,
+             .visibilityTest,
+             .optionals,
+             .vectorAsset,
+             .vectorLogicActive,
+             .vectorLogicInactive:
             return [
                 equal(\.topAnchor),
                 equal(\.leftAnchor),

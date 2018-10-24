@@ -13,15 +13,43 @@ enum LonaNode {
 
     // MARK: Public
 
+    static func runSync(
+        arguments: [String],
+        inputData: Data? = nil,
+        currentDirectoryPath: String? = nil) throws -> Data {
+
+        var output: Data?
+        var failureMessage: String?
+
+        run(
+            arguments: arguments,
+            inputData: inputData,
+            currentDirectoryPath: currentDirectoryPath,
+            sync: true,
+            onSuccess: { data in
+                output = data
+            }, onFailure: { code, error in
+                failureMessage = "Error \(code): \(error ?? "")"
+            }
+        )
+
+        if let output = output {
+            return output
+        } else {
+            throw failureMessage ?? "Node error"
+        }
+    }
+
     static func run(
-        scriptPath: String,
-        inputData: CSData? = nil,
+        arguments: [String],
+        inputData: Data? = nil,
         currentDirectoryPath: String? = nil,
-        onSuccess: ((String?) -> Void)? = nil,
+        sync: Bool = false,
+        onSuccess: ((Data) -> Void)? = nil,
         onFailure: ((Int, String?) -> Void)? = nil) {
         guard let nodePath = LonaNode.binaryPath else { return }
 
-        DispatchQueue.global().async {
+        func run() {
             let task = Process()
 
             var env = ProcessInfo.processInfo.environment
@@ -33,7 +61,7 @@ enum LonaNode {
 
             // Set the task parameters
             task.launchPath = nodePath
-            task.arguments = [scriptPath]
+            task.arguments = arguments
 
             if let currentDirectoryPath = currentDirectoryPath {
                 task.currentDirectoryPath = currentDirectoryPath
@@ -48,8 +76,8 @@ enum LonaNode {
             // Launch the task
             task.launch()
 
-            if let inputData = inputData, let data = inputData.toData() {
-                stdin.fileHandleForWriting.write(data)
+            if let inputData = inputData {
+                stdin.fileHandleForWriting.write(inputData)
             }
 
             stdin.fileHandleForWriting.closeFile()
@@ -58,9 +86,16 @@ enum LonaNode {
 
             let handle = stdout.fileHandleForReading
             let data = handle.readDataToEndOfFile()
-            let out = NSString(data: data, encoding: String.Encoding.utf8.rawValue)
 
-            onSuccess?(out as String?)
+            onSuccess?(data)
+        }
+
+        if sync {
+            run()
+        } else {
+            DispatchQueue.global().async {
+                run()
+            }
         }
     }
 

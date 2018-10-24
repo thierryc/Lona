@@ -70,6 +70,9 @@ class CoreComponentInspectorView: NSStackView {
         // Animation
         case animation
         case animationSpeed
+
+        // Metadata
+        case backingElementClass
     }
 
     var value: Properties = [:]
@@ -175,6 +178,15 @@ class CoreComponentInspectorView: NSStackView {
         values: ["cover", "contain", "stretch"],
         valueToTitle: ["cover": "Aspect Fill", "contain": "Aspect Fit", "stretch": "Stretch Fill"]
     )
+
+    var backingElement = CSValueField(
+        value: CSValue(
+            type: PlatformSpecificString,
+            data: CSData.Object([:])))
+    var backingRow = NSStackView(
+        views: [NSTextField(labelWithStringCompat: "Backing Element")],
+        orientation: .horizontal,
+        stretched: true)
 
     var width: CGFloat = 280
     var labelX: CGFloat = 10
@@ -527,7 +539,11 @@ class CoreComponentInspectorView: NSStackView {
         )
 
         let backgroundSection = renderSection(title: "Shadow", views: [shadowContainer])
-        backgroundSection.isHidden = true
+        return backgroundSection
+    }
+
+    func renderMetadataSection() -> DisclosureContentRow {
+        let backgroundSection = renderSection(title: "Metadata", views: [backingRow])
         return backgroundSection
     }
 
@@ -555,7 +571,7 @@ class CoreComponentInspectorView: NSStackView {
         imageView.constrain(aspectRatio: 1)
         imageView.widthAnchor.constraint(equalToConstant: 240).isActive = true
 
-        let button = Button(title: "Browse...")
+        let button = Button(titleText: "Browse...")
         button.onPress = {
             let dialog = NSOpenPanel()
 
@@ -615,7 +631,7 @@ class CoreComponentInspectorView: NSStackView {
         animationViewContainer.constrain(aspectRatio: 1)
         animationViewContainer.widthAnchor.constraint(equalToConstant: 240).isActive = true
 
-        let button = Button(title: "Browse...")
+        let button = Button(titleText: "Browse...")
         button.onPress = {
             let dialog = NSOpenPanel()
 
@@ -671,7 +687,8 @@ class CoreComponentInspectorView: NSStackView {
             renderBackgroundSection(),
             shadowSection!,
             imageSection!,
-            animationSection!
+            animationSection!,
+            renderMetadataSection()
         ]
 
         for section in sections {
@@ -708,8 +725,7 @@ class CoreComponentInspectorView: NSStackView {
         case .builtIn(.text):
             textSection.isHidden = false
             layoutSection.isHidden = true
-            shadowSection.isHidden = false
-        case .builtIn(.image):
+        case .builtIn(.image), .builtIn(.vectorGraphic):
             imageSection.isHidden = false
         case .builtIn(.animation):
             animationSection.isHidden = false
@@ -776,6 +792,25 @@ class CoreComponentInspectorView: NSStackView {
             (animationURLView, .animation),
             (animationSpeedView, .animationSpeed)
         ]
+
+        // CSValueField needs to be recreated on change since it doesn't support updating
+        // TODO: When we switch to controlled components, we won't need to do this
+        if let value = properties[.backingElementClass] {
+            func setup(value: CSData) {
+                backingElement.view.removeFromSuperview()
+                backingElement = CSValueField(
+                    value: CSValue(
+                        type: PlatformSpecificString,
+                        data: value))
+                backingRow.addArrangedSubview(backingElement.view, stretched: true)
+                backingElement.onChangeData = { data in
+                    self.handlePropertyChange(for: .backingElementClass, value: data)
+                    setup(value: data)
+                }
+            }
+
+            setup(value: value)
+        }
 
         fields.forEach({ (control, property) in
             var control = control

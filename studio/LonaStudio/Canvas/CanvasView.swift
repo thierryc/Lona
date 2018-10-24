@@ -15,6 +15,15 @@ struct ConfiguredLayer {
     let layer: CSLayer
     let config: ComponentConfiguration
     let children: [ConfiguredLayer]
+
+    func shadow() -> CSShadow? {
+        let logicValue = config.get(attribute: "shadow", for: layer.name).string
+        let constantValue = layer.shadow
+
+        guard let shadow = logicValue ?? constantValue else { return nil }
+
+        return CSShadows.shadow(with: shadow)
+    }
 }
 
 // Passed as a C pointer to Yoga, since we can't pass a struct
@@ -60,11 +69,6 @@ func getLayerFont(configuredLayer: ConfiguredLayer) -> TextStyle {
     return CSTypography.getFontBy(id: getLayerFontName(configuredLayer: configuredLayer)).font
 }
 
-func getLayoutShadow(configuredLayer: ConfiguredLayer) -> CSShadow? {
-    guard let shadow = configuredLayer.layer.shadow else { return nil }
-    return CSShadows.shadow(with: shadow)
-}
-
 func numberValue(for configuredLayer: ConfiguredLayer, attributeChain: [String], optionalValues: [Double?] = [], defaultValue: Double = 0) -> Double {
     for attribute in attributeChain {
         let raw = configuredLayer.config.get(attribute: attribute, for: configuredLayer.layer.name)
@@ -88,13 +92,6 @@ func attributedString(for configuredLayer: ConfiguredLayer) -> NSAttributedStrin
     let titleParagraphStyle = textStyle.paragraphStyle
     titleParagraphStyle.alignment = NSTextAlignment(configuredLayer.layer.textAlign ?? "left")
     attributeDict[.paragraphStyle] = titleParagraphStyle
-
-    // Shadow
-    if configuredLayer.layer.shadow != nil,
-        let shadow = getLayoutShadow(configuredLayer: configuredLayer) {
-        let shadowAttributeText = shadow.attributeDictionary()
-        attributeDict.merge(with: shadowAttributeText)
-    }
 
     return NSAttributedString(string: text, attributes: attributeDict)
 }
@@ -149,13 +146,6 @@ class FlippedView: NSView {
     override var isFlipped: Bool { return true }
 }
 
-func ensureLayer(for view: NSView) {
-    if view.layer == nil {
-        view.wantsLayer = true
-        view.layer = CALayer()
-    }
-}
-
 let BORDERS: [(edge: NSRectEdge, key: String)] = [
     (NSRectEdge.minY, key: "borderTopWidth"),
     (NSRectEdge.maxX, key: "borderRightWidth"),
@@ -163,7 +153,9 @@ let BORDERS: [(edge: NSRectEdge, key: String)] = [
     (NSRectEdge.minX, key: "borderLeftWidth")
 ]
 
-let imageCache = LayerContentsCache()
+let imageCache = ImageCache<NSImage>()
+
+let svgRenderCache = LRUCache<String, NSImage>()
 
 func renderBox(configuredLayer: ConfiguredLayer, node: YGNodeRef, options: RenderOptions) -> NSView {
     let layout = node.layout
@@ -187,33 +179,37 @@ func renderBox(configuredLayer: ConfiguredLayer, node: YGNodeRef, options: Rende
         height: layout.height
     )
 
-    let box = CSView(frame: frame, onClick: handleClick)
-
-    box.translatesAutoresizingMaskIntoConstraints = true
+    let box = CSView(frame: frame)
+    box.layerName = layer.name
+    box.onClick = handleClick
 
     if layer.text == nil, let color = config.get(attribute: "backgroundColor", for: layer.name).string ?? layer.backgroundColor {
-        box.layer?.backgroundColor = CSColors.parse(css: color, withDefault: NSColor.clear).color.cgColor
+        box.fillColor = CSColors.parse(css: color, withDefault: NSColor.clear).color
     }
 
-    if let id = layer.backgroundGradient, let gradient = CSGradients.gradient(withId: id) {
-        box.layer = gradient.caGradientLayer
-    }
+//    if let id = layer.backgroundGradient, let gradient = CSGradients.gradient(withId: id) {
+//        box.layer = gradient.caGradientLayer
+//    }
 
     if let borderRadius = config.get(attribute: "borderRadius", for: layer.name).number ?? layer.borderRadius {
-        box.layer?.cornerRadius = min(CGFloat(borderRadius), layout.width / 2, layout.height / 2)
+        box.cornerRadius = min(CGFloat(borderRadius), layout.width / 2, layout.height / 2)
     }
 
     let borderColorString = config.get(attribute: "borderColor", for: layer.name).string ?? layer.borderColor
-    var borderColor = borderColorString != nil ? CSColors.parse(css: borderColorString!, withDefault: NSColor.clear).color.cgColor : nil
+    var borderColor = borderColorString != nil ? CSColors.parse(css: borderColorString!, withDefault: NSColor.clear).color : nil
 
-    if let width = config.get(attribute: "borderWidth", for: layer.name).number ?? layer.borderWidth, width > 0 {
-        box.layer?.borderWidth = CGFloat(width)
-        borderColor ?= CGColor.clear
+    let borderWidth = config.get(attribute: "borderWidth", for: layer.name).number ?? layer.borderWidth
+
+    if let borderWidth = borderWidth, borderWidth > 0 {
+        box.borderWidth = CGFloat(borderWidth)
+        borderColor ?= NSColor.clear
     }
 
     if let borderColor = borderColor {
-        box.layer?.borderColor = borderColor
+        box.borderColor = borderColor
     }
+
+    box.shadow = configuredLayer.shadow()?.nsShadow
 
     if layer.type == .animation {
         let animation: String? = config.get(attribute: "animation", for: layer.name).string ?? layer.animation
@@ -256,40 +252,45 @@ func renderBox(configuredLayer: ConfiguredLayer, node: YGNodeRef, options: Rende
 
             scale = ceil(scale)
 
-//            if let desiredScaleFactor = NSApplication.shared().windows.first?.backingScaleFactor {
-//                scale *= desiredScaleFactor
-////                let actualScaleFactor = nsImage?.recommendedLayerContentsScale(desiredScaleFactor) ?? 1
-////                box.layer?.contents = nsImage?.layerContents(forContentsScale: actualScaleFactor)
-////                box.layer?.contentsScale = actualScaleFactor
-//            }
-
-            box.layer?.contentsGravity = kCAGravityResizeAspect
-            box.layer?.contentsScale = scale
-            box.layer?.masksToBounds = true
-
             if let cached = imageCache.contents(for: url, at: scale) {
-                box.layer?.contents = cached
+                box.backgroundImage = cached
             } else {
                 let nsImage = NSImage(contentsOf: url)
                 nsImage?.cacheMode = .always
 
-                if let contents = nsImage?.layerContents(forContentsScale: scale) {
-                    box.layer?.contents = contents
+                if let contents = nsImage {
+                    box.backgroundImage = contents
                     imageCache.add(contents: contents, for: url, at: scale)
                 }
             }
         }
-    }
+    } else if layer.type == .vectorGraphic {
+        let imageValue: String? = config.get(attribute: "image", for: layer.name).string ?? layer.image
 
-    if config.scope.get(value: "cs:selected").data.stringValue == layer.name {
-        if box.layer == nil {
-            box.wantsLayer = true
-            box.layer = CALayer()
+        if let imageValue = imageValue, let url = URL(string: imageValue)?.absoluteURLForWorkspaceURL() {
+
+            let dynamicValues = config.get(attribute: "vector", for: layer.name)
+
+            let cacheKey = "\(imageValue)*w\(layout.width)*h\(layout.height)*\(dynamicValues.toData()?.utf8String() ?? "")"
+
+            if let cached = svgRenderCache.item(for: cacheKey) {
+                box.backgroundImage = cached
+            } else if let image = SVG.renderSync(
+                contentsOf: url,
+                dynamicValues: dynamicValues,
+                size: CGSize(width: layout.width, height: layout.height)) {
+
+                image.cacheMode = .always
+                box.backgroundImage = image
+                svgRenderCache.add(item: image, for: cacheKey)
+            }
         }
-
-        box.layer!.borderWidth = 2.0
-        box.layer!.borderColor = #colorLiteral(red: 0.2352941176, green: 0.7215686275, blue: 0.9960784314, alpha: 1).cgColor
     }
+
+//    if config.scope.get(value: "cs:selected").data.stringValue == layer.name {
+//        box.layer!.borderWidth = 2.0
+//        box.layer!.borderColor = #colorLiteral(red: 0.2352941176, green: 0.7215686275, blue: 0.9960784314, alpha: 1).cgColor
+//    }
 
 //    Swift.print("layer text", layer.text, paragraph(for: layer).string)
 
@@ -324,6 +325,15 @@ func renderBox(configuredLayer: ConfiguredLayer, node: YGNodeRef, options: Rende
     } else {
         for (index, sub) in configuredLayer.children.enumerated() {
             let child = renderBox(configuredLayer: sub, node: YGNodeGetChild(node, UInt32(index)), options: options)
+
+            // Children within an NSBox have coordinates starting from inside the border of the NSBox.
+            // Our Yoga layout has every child positioned, already taking border width into account.
+            // We need to offset the child by the border width so that we don't count the border width twice:
+            // once for the NSBox and once in the Yoga layout.
+            if let borderWidth = borderWidth, borderWidth > 0 {
+                child.frame.origin.x -= CGFloat(borderWidth)
+                child.frame.origin.y += CGFloat(borderWidth)
+            }
 
             box.addSubview(child)
         }
@@ -687,6 +697,7 @@ enum RenderOption {
     case assetScale(CGFloat)
     case hideAnimationLayers(Bool)
     case renderCanvasShadow(Bool)
+    case selectedLayerName(String?)
 }
 
 struct RenderOptions {
@@ -694,6 +705,7 @@ struct RenderOptions {
     var assetScale: CGFloat = 1
     var hideAnimationLayers: Bool = false
     var renderCanvasShadow: Bool = false
+    var selectedLayerName: String?
 
     mutating func merge(options: [RenderOption]) {
         options.forEach({ option in
@@ -702,6 +714,7 @@ struct RenderOptions {
             case .assetScale(let value): assetScale = value
             case .hideAnimationLayers(let value): hideAnimationLayers = value
             case .renderCanvasShadow(let value): renderCanvasShadow = value
+            case .selectedLayerName(let value): selectedLayerName = value
             }
         })
     }
@@ -720,6 +733,7 @@ class CanvasView: NSView {
 
     var rootView = NSView()
     var backgroundView = NSBox()
+    var selectionView = NSBox()
 
     init(canvas: Canvas, rootLayer: CSLayer, config: ComponentConfiguration, options list: [RenderOption] = []) {
         self.canvas = canvas
@@ -741,6 +755,7 @@ class CanvasView: NSView {
     func setUpViews() {
         backgroundView.addSubview(rootView)
         addSubview(backgroundView)
+        addSubview(selectionView)
 
         frame = rootView.frame
         backgroundView.frame = rootView.frame
@@ -749,17 +764,21 @@ class CanvasView: NSView {
         backgroundView.boxType = .custom
         backgroundView.contentViewMargins = .zero
 
+        selectionView.boxType = .custom
+        selectionView.borderType = .lineBorder
+        selectionView.borderWidth = 1
+        selectionView.borderColor = #colorLiteral(red: 0.2588235438, green: 0.7568627596, blue: 0.9686274529, alpha: 1)
+        selectionView.cornerRadius = 2
+        selectionView.contentViewMargins = .zero
+
         // Shadows & Fills
 
         // TODO: On High Sierra, if the canvas has a transparent fill, shadows show up behind each subview's layer.
         // Maybe we don't want shadows anyway though.
-        wantsLayer = true
 
         backgroundView.fillColor = CSColors.parse(css: canvas.backgroundColor, withDefault: NSColor.white).color
 
         if options.renderCanvasShadow {
-            layer?.backgroundColor = CGColor.white
-
             frame.size.width += 10
             frame.size.height += 10
             backgroundView.frame.origin.x += 5
@@ -769,6 +788,19 @@ class CanvasView: NSView {
                 color: NSColor.black.withAlphaComponent(0.5),
                 offset: NSSize(width: 0, height: -1),
                 blur: 2)
+        }
+
+        if let selected = self.firstDescendant(where: { view in
+            guard let csView = view as? CSView, let name = options.selectedLayerName else {
+                return false
+            }
+
+            return csView.layerName == name
+        }) {
+            selectionView.frame = convert(selected.bounds.insetBy(dx: -1, dy: -1), from: selected)
+            selectionView.isHidden = false
+        } else {
+            selectionView.isHidden = true
         }
     }
 

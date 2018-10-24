@@ -1,11 +1,13 @@
+let compare = (a: Types.layer, b: Types.layer): int =>
+  compare(a.name, b.name);
+
+let equal = (a: Types.layer, b: Types.layer): bool => compare(a, b) == 0;
+
 module LayerMap = {
-  include
-    Map.Make(
-      {
-        type t = Types.layer;
-        let compare = (a: t, b: t) : int => compare(a.name, b.name);
-      }
-    );
+  include Map.Make({
+    type t = Types.layer;
+    let compare = compare;
+  });
   let find_opt = (key, map) =>
     switch (find(key, map)) {
     | item => Some(item)
@@ -14,10 +16,11 @@ module LayerMap = {
 };
 
 let isPrimitiveTypeName = (typeName: Types.layerType) =>
-  switch typeName {
+  switch (typeName) {
   | Types.View
   | Types.Text
   | Types.Image
+  | Types.VectorGraphic
   | Types.Animation => true
   | Types.Children
   | Types.Component(_)
@@ -32,9 +35,10 @@ type parameterCategory =
   | Meta;
 
 let getParameterCategory = (x: ParameterKey.t) =>
-  switch x {
+  switch (x) {
   | AlignItems => Style
   | AlignSelf => Style
+  | Display => Style
   | Flex => Style
   | FlexDirection => Style
   | TextStyle => Style
@@ -54,6 +58,7 @@ let getParameterCategory = (x: ParameterKey.t) =>
   | BorderRadius => Style
   | BorderWidth => Style
   | TextAlign => Style
+  | Shadow => Style
   /* Props */
   | NumberOfLines => Prop
   | Text => Prop
@@ -86,6 +91,15 @@ let find = (f, rootLayer: Types.layer) =>
 let findByName = (name, rootLayer: Types.layer) =>
   rootLayer |> find((layer: Types.layer) => layer.name == name);
 
+let rec filter =
+        (f: Types.layer => bool, layer: Types.layer): option(Types.layer) =>
+  if (f(layer)) {
+    let children = layer.children |> List.map(filter(f)) |> Sequence.compact;
+    Some({...layer, children});
+  } else {
+    None;
+  };
+
 let flatmapParent = (f, layer: Types.layer) => {
   let rec inner = (layer: Types.layer) =>
     (layer.children |> List.map(f(Some(layer))))
@@ -111,75 +125,117 @@ let flatmapParameters = (f, layer: Types.layer) => {
   List.concat(parameterLists) |> List.map(f(layer));
 };
 
-let getFlexDirection = (layer: Types.layer) =>
-  switch (ParameterMap.find(ParameterKey.FlexDirection, layer.parameters)) {
+let getFlexDirection = (parameters: Types.layerParameters) =>
+  switch (ParameterMap.find(ParameterKey.FlexDirection, parameters)) {
   | value => value.data |> Json.Decode.string
   | exception Not_found => "column"
   };
 
-let getStringParameterOpt = (parameterName, layer: Types.layer) =>
-  switch (ParameterMap.find_opt(parameterName, layer.parameters)) {
+let getAlignItems = (parameters: Types.layerParameters) =>
+  switch (ParameterMap.find(ParameterKey.AlignItems, parameters)) {
+  | value => value.data |> Json.Decode.string
+  | exception Not_found => "flex-start"
+  };
+
+let getJustifyContent = (parameters: Types.layerParameters) =>
+  switch (ParameterMap.find(ParameterKey.JustifyContent, parameters)) {
+  | value => value.data |> Json.Decode.string
+  | exception Not_found => "flex-start"
+  };
+
+let getStringParameterOpt = (parameterName, parameters: Types.layerParameters) =>
+  switch (ParameterMap.find_opt(parameterName, parameters)) {
   | Some(value) => Some(value.data |> Json.Decode.string)
   | None => None
   };
 
-let getStringParameter = (parameterName, layer: Types.layer) =>
-  switch (getStringParameterOpt(parameterName, layer)) {
+let getStringParameter = (parameterName, parameters: Types.layerParameters) =>
+  switch (getStringParameterOpt(parameterName, parameters)) {
   | Some(value) => value
   | None => ""
   };
 
-let getNumberParameterOpt = (parameterName, layer: Types.layer) =>
-  switch (ParameterMap.find(parameterName, layer.parameters)) {
+let getNumberParameterOpt = (parameterName, parameters: Types.layerParameters) =>
+  switch (ParameterMap.find(parameterName, parameters)) {
   | value => Some(value.data |> Json.Decode.float)
   | exception Not_found => None
   };
 
-let getNumberParameter = (parameterName, layer: Types.layer) =>
-  switch (getNumberParameterOpt(parameterName, layer)) {
+let getNumberParameter = (parameterName, parameters: Types.layerParameters) =>
+  switch (getNumberParameterOpt(parameterName, parameters)) {
   | Some(value) => value
   | None => 0.0
   };
 
 type dimensionSizingRules = {
-  width: Types.sizingRule,
-  height: Types.sizingRule
+  width: Layout.sizingRule,
+  height: Layout.sizingRule,
 };
 
-let getSizingRules = (parent: option(Types.layer), layer: Types.layer) => {
+/* Lona save format uses React Native defaults, so the top-level layer has a column parent */
+let getSizingRules =
+    (parent: option(Types.layer), parameters: Types.layerParameters) => {
   let parentDirection =
-    switch parent {
-    | Some(parent) => getFlexDirection(parent)
+    switch (parent) {
+    | Some(parent) => getFlexDirection(parent.parameters)
     | None => "column"
     };
-  let flex = getNumberParameterOpt(Flex, layer);
-  let width = getNumberParameterOpt(Width, layer);
-  let height = getNumberParameterOpt(Height, layer);
-  let alignSelf = getStringParameterOpt(AlignSelf, layer);
+  let flex = getNumberParameterOpt(Flex, parameters);
+  let width = getNumberParameterOpt(Width, parameters);
+  let height = getNumberParameterOpt(Height, parameters);
+  let alignSelf = getStringParameterOpt(AlignSelf, parameters);
   let widthSizingRule =
     switch (parentDirection, flex, width, alignSelf) {
-    | ("row", Some(1.0), _, _) => Types.Fill
-    | ("row", _, Some(value), _) => Types.Fixed(value)
-    | ("row", _, _, _) => Types.FitContent
-    | (_, _, _, Some("stretch")) => Types.Fill
-    | (_, _, Some(value), _) => Types.Fixed(value)
-    | (_, _, _, _) => Types.FitContent
+    | ("row", Some(1.0), _, _) => Layout.Fill
+    | ("row", _, Some(value), _) => Layout.Fixed(value)
+    | ("row", _, _, _) => Layout.FitContent
+    | (_, _, _, Some("stretch")) => Layout.Fill
+    | (_, _, Some(value), _) => Layout.Fixed(value)
+    | (_, _, _, _) => Layout.FitContent
     };
   let heightSizingRule =
     switch (parentDirection, flex, height, alignSelf) {
-    | ("row", _, _, Some("stretch")) => Types.Fill
-    | ("row", _, Some(value), _) => Types.Fixed(value)
-    | ("row", _, _, _) => Types.FitContent
-    | (_, Some(1.0), _, _) => Types.Fill
-    | (_, _, Some(value), _) => Types.Fixed(value)
-    | (_, _, _, _) => Types.FitContent
+    | ("row", _, _, Some("stretch")) => Layout.Fill
+    | ("row", _, Some(value), _) => Layout.Fixed(value)
+    | ("row", _, _, _) => Layout.FitContent
+    | (_, Some(1.0), _, _) => Layout.Fill
+    | (_, _, Some(value), _) => Layout.Fixed(value)
+    | (_, _, _, _) => Layout.FitContent
     };
   {width: widthSizingRule, height: heightSizingRule};
 };
 
+let getLayout =
+    (parent: option(Types.layer), parameters: Types.layerParameters)
+    : Layout.t => {
+  let {width, height} = getSizingRules(parent, parameters);
+  let direction = getFlexDirection(parameters) |> Layout.FromString.direction;
+  let justifyContent =
+    switch (getStringParameterOpt(ParameterKey.JustifyContent, parameters)) {
+    | Some(value) => value |> Layout.FromString.childrenAlignment
+    | None => Unspecified
+    };
+  let alignItems =
+    switch (getStringParameterOpt(ParameterKey.AlignItems, parameters)) {
+    | Some(value) => value |> Layout.FromString.childrenAlignment
+    | None => Unspecified
+    };
+  let horizontalAlignment =
+    switch (direction) {
+    | Row => justifyContent
+    | Column => alignItems
+    };
+  let verticalAlignment =
+    switch (direction) {
+    | Row => alignItems
+    | Column => justifyContent
+    };
+  {direction, width, height, horizontalAlignment, verticalAlignment};
+};
+
 let printSizingRule =
   fun
-  | Types.Fill => "fill"
+  | Layout.Fill => "fill"
   | FitContent => "fitContent"
   | Fixed(value) => "fixed(" ++ string_of_float(value) ++ ")";
 
@@ -187,7 +243,7 @@ type edgeInsets = {
   top: float,
   right: float,
   bottom: float,
-  left: float
+  left: float,
 };
 
 let getInsets = (prefix, layer: Types.layer) => {
@@ -195,7 +251,7 @@ let getInsets = (prefix, layer: Types.layer) => {
   let extract = key =>
     ParameterMap.find_opt(
       ParameterKey.fromString(prefix ++ key),
-      layer.parameters
+      layer.parameters,
     );
   let unwrap =
     fun
@@ -210,19 +266,77 @@ let getPadding = getInsets("padding");
 
 let getMargin = getInsets("margin");
 
+type vectorParamKey =
+  | Fill
+  | Stroke;
+
+let vectorParamKeyToString = paramKey =>
+  switch (paramKey) {
+  | Fill => "fill"
+  | Stroke => "stroke"
+  };
+
+let vectorParamKeyFromString = (key: string): vectorParamKey =>
+  switch (key) {
+  | "fill" => Fill
+  | "stroke" => Stroke
+  | _ =>
+    Js.log("Invalid vector param key");
+    raise(Not_found);
+  };
+
+type vectorAssignment = {
+  elementName: string,
+  paramKey: vectorParamKey,
+  originalIdentifierPath: list(string),
+};
+
+let hasDynamicVectorParam =
+    (
+      vectorAssignments: list(vectorAssignment),
+      variableName: string,
+      paramKey: vectorParamKey,
+    )
+    : bool =>
+  vectorAssignments
+  |> Sequence.firstWhere((vectorAssignment: vectorAssignment) =>
+       vectorAssignment.elementName == variableName
+       && vectorAssignment.paramKey == paramKey
+     )
+  != None;
+
+let vectorAssignments =
+    (layer: Types.layer, node: Logic.logicNode): list(vectorAssignment) =>
+  Logic.assignedIdentifiers(node)
+  |> Logic.IdentifierSet.elements
+  |> List.map(((_, id)) =>
+       switch (id) {
+       | ["layers", layerName, "vector", elementName, paramKey]
+           when layerName == layer.name =>
+         let paramKey = paramKey |> vectorParamKeyFromString;
+         Some({elementName, paramKey, originalIdentifierPath: id});
+       | _ => None
+       }
+     )
+  |> Sequence.compact;
+
 let parameterAssignmentsFromLogic = (layer, node) => {
-  let identifiers = Logic.accessedIdentifiers(node);
+  let identifiers = Logic.assignedIdentifiers(node);
   let updateAssignments = (layerName, propertyName, logicValue, acc) =>
     switch (findByName(layerName, layer)) {
     | Some(found) =>
       switch (LayerMap.find_opt(found, acc)) {
       | Some(x) =>
-        LayerMap.add(found, ParameterMap.add(propertyName, logicValue, x), acc)
+        LayerMap.add(
+          found,
+          ParameterMap.add(propertyName, logicValue, x),
+          acc,
+        )
       | None =>
         LayerMap.add(
           found,
           ParameterMap.add(propertyName, logicValue, ParameterMap.empty),
-          acc
+          acc,
         )
       }
     | None => acc
@@ -232,17 +346,17 @@ let parameterAssignmentsFromLogic = (layer, node) => {
   |> List.map(((type_, path)) => Logic.Identifier(type_, path))
   |> List.fold_left(
        (acc, item) =>
-         switch item {
+         switch (item) {
          | Logic.Identifier(_, [_, layerName, propertyName]) =>
            updateAssignments(
              layerName,
              propertyName |> ParameterKey.fromString,
              item,
-             acc
+             acc,
            )
          | _ => acc
          },
-       LayerMap.empty
+       LayerMap.empty,
      );
 };
 
@@ -257,7 +371,7 @@ let logicAssignmentsFromLayerParameters = layer => {
       let receiver =
         Logic.Identifier(
           lonaValue.ltype,
-          ["layers", layer.name, parameterName |> ParameterKey.toString]
+          ["layers", layer.name, parameterName |> ParameterKey.toString],
         );
       let source = Logic.Literal(lonaValue);
       let assignment = Logic.Assign(source, receiver);
@@ -287,15 +401,18 @@ let isTextLayer = (layer: Types.layer) => layer.typeName == Types.Text;
 
 let isImageLayer = (layer: Types.layer) => layer.typeName == Types.Image;
 
+let isVectorGraphicLayer = (layer: Types.layer) =>
+  layer.typeName == Types.VectorGraphic;
+
 let isComponentLayer = (layer: Types.layer) =>
-  switch layer.typeName {
+  switch (layer.typeName) {
   | Component(_) => true
   | _ => false
   };
 
 type availableTypeNames = {
   builtIn: list(Types.layerType),
-  custom: list(string)
+  custom: list(string),
 };
 
 let getTypeNames = rootLayer => {
@@ -305,18 +422,48 @@ let getTypeNames = rootLayer => {
     |> List.map((layer: Types.layer) => layer.typeName)
     |> List.fold_left(
          (acc, item) => List.mem(item, acc) ? acc : [item, ...acc],
-         []
+         [],
        );
   let builtInTypeNames = typeNames |> List.filter(isPrimitiveTypeName);
   let customTypeNames =
     typeNames
     |> List.fold_left(
          (acc, item) =>
-           switch item {
+           switch (item) {
            | Types.Component(name) => [name, ...acc]
            | _ => acc
            },
-         []
+         [],
        );
   {builtIn: builtInTypeNames, custom: customTypeNames};
 };
+
+/* For the purposes of layouts, we want to swap the custom component layer
+   with the root layer from the custom component's definition. We should
+   use the parameters of the custom component's root layer, since these
+   determine layout. We should still use the type, name, and children of
+   the custom component layer. */
+let getRootLayerForComponentName =
+    (getComponent: string => Js.Json.t, layer: Types.layer, name): Types.layer => {
+  let component = getComponent(name);
+  let rootLayer = component |> Decode.Component.rootLayer(getComponent);
+  {
+    typeName: layer.typeName,
+    styles: layer.styles,
+    name: layer.name,
+    parameters: rootLayer.parameters,
+    children: layer.children,
+    metadata: layer.metadata,
+  };
+};
+
+/* Any time we access a layer, we want to use its proxy if it has one.
+   This is how we layout custom components.
+   TODO: When we handle "Children" components, we'll need to find/use
+   a different proxy */
+let getProxyLayer = (getComponent: string => Js.Json.t, layer: Types.layer) =>
+  switch (layer.typeName) {
+  | Types.Component(name) =>
+    getRootLayerForComponentName(getComponent, layer, name)
+  | _ => layer
+  };

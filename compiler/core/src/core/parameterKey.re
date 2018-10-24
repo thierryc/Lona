@@ -15,6 +15,7 @@ type t =
   | AlignItems
   | AlignSelf
   | BackgroundColor
+  | Display
   | Flex
   | FlexDirection
   | JustifyContent
@@ -29,6 +30,7 @@ type t =
   | BorderRadius
   | BorderWidth
   | BorderColor
+  | Shadow
   | Width
   | Height
   /* Interactivity */
@@ -37,7 +39,7 @@ type t =
   | OnPress;
 
 let fromString = string =>
-  switch string {
+  switch (string) {
   /* Built-in */
   | "visible" => Visible
   /* Text */
@@ -52,6 +54,7 @@ let fromString = string =>
   | "alignItems" => AlignItems
   | "alignSelf" => AlignSelf
   | "backgroundColor" => BackgroundColor
+  | "display" => Display
   | "flex" => Flex
   | "flexDirection" => FlexDirection
   | "justifyContent" => JustifyContent
@@ -66,6 +69,7 @@ let fromString = string =>
   | "borderRadius" => BorderRadius
   | "borderWidth" => BorderWidth
   | "borderColor" => BorderColor
+  | "shadow" => Shadow
   | "width" => Width
   | "height" => Height
   /* Interactivity */
@@ -77,7 +81,7 @@ let fromString = string =>
   };
 
 let toString = key =>
-  switch key {
+  switch (key) {
   /* Built-in */
   | Visible => "visible"
   /* Text */
@@ -91,6 +95,7 @@ let toString = key =>
   | AlignItems => "alignItems"
   | AlignSelf => "alignSelf"
   | BackgroundColor => "backgroundColor"
+  | Display => "display"
   | Flex => "flex"
   | FlexDirection => "flexDirection"
   | JustifyContent => "justifyContent"
@@ -105,6 +110,7 @@ let toString = key =>
   | BorderRadius => "borderRadius"
   | BorderWidth => "borderWidth"
   | BorderColor => "borderColor"
+  | Shadow => "shadow"
   | Width => "width"
   | Height => "height"
   /* Interactivity */

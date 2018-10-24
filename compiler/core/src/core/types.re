@@ -8,23 +8,15 @@ type lonaType =
   | Reference(string)
   | Named(string, lonaType)
   | Function(
-      list(
-        {
-          .
-          "label": string,
-          "type": lonaType
-        }
-      ),
-      lonaType
+      list({
+        .
+        "label": string,
+        "type": lonaType,
+      }),
+      lonaType,
     );
 
 let undefinedType = Reference("Undefined");
-
-let referenceFromJs = ltype =>
-  switch ltype {
-  | Reference(name) => Some(name)
-  | _ => None
-  };
 
 let booleanType = Reference("Boolean");
 
@@ -36,13 +28,15 @@ let colorType = Named("Color", stringType);
 
 let textStyleType = Named("TextStyle", stringType);
 
+let shadowType = Named("Shadow", stringType);
+
 let urlType = Named("URL", stringType);
 
 let handlerType = Function([], Reference("Undefined"));
 
 type lonaValue = {
   ltype: lonaType,
-  data: Js.Json.t
+  data: Js.Json.t,
 };
 
 type cmp =
@@ -58,37 +52,50 @@ type cmp =
 type parameter = {
   name: ParameterKey.t,
   ltype: lonaType,
-  defaultValue: option(Js.Json.t)
+  defaultValue: option(Js.Json.t),
 };
 
 type layerType =
   | View
   | Text
   | Image
+  | VectorGraphic
   | Animation
   | Children
   | Component(string)
   | Unknown;
 
 let layerTypeToString = x =>
-  switch x {
+  switch (x) {
   | View => "View"
   | Text => "Text"
   | Image => "Image"
+  | VectorGraphic => "VectorGraphic"
   | Animation => "Animation"
   | Children => "Children"
   | Component(value) => value
   | Unknown => "Unknown"
   };
 
+type layerParameters = ParameterMap.t(lonaValue);
+
+type platformSpecificValue('a) = {
+  iOS: 'a,
+  macOS: 'a,
+  reactDom: 'a,
+  reactNative: 'a,
+  reactSketchapp: 'a,
+};
+
+type layerMetadata = {
+  backingElementClass: platformSpecificValue(option(string)),
+};
+
 type layer = {
   typeName: layerType,
   name: string,
-  parameters: ParameterMap.t(lonaValue),
-  children: list(layer)
+  styles: list(Styles.namedStyles(option(lonaValue))),
+  parameters: layerParameters,
+  children: list(layer),
+  metadata: layerMetadata,
 };
-
-type sizingRule =
-  | Fill
-  | FitContent
-  | Fixed(float);

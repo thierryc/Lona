@@ -2,22 +2,19 @@ import React from "react"
 import { View, StyleSheet, TextStyles } from "@mathieudutour/react-sketchapp"
 
 import colors from "../colors"
+import shadows from "../shadows"
 import textStyles from "../textStyles"
 import Button from "../interactivity/Button"
 
 export default class NestedButtons extends React.Component {
   render() {
+
+
     return (
-      <View style={[ styles.view, {} ]}>
-        <Button style={[ styles.button, {} ]} label={"Button 1"}>
-
-        </Button>
-        <View style={[ styles.view1, {} ]}>
-
-        </View>
-        <Button style={[ styles.button2, {} ]} label={"Button 2"}>
-
-        </Button>
+      <View style={styles.view}>
+        <Button label={"Button 1"} />
+        <View style={styles.view1} />
+        <Button label={"Button 2"} />
       </View>
     );
   }
@@ -25,13 +22,35 @@ export default class NestedButtons extends React.Component {
 
 let styles = StyleSheet.create({
   view: {
+    alignItems: "flex-start",
     alignSelf: "stretch",
+    flex: 0,
+    flexDirection: "column",
+    justifyContent: "flex-start",
     paddingTop: 24,
     paddingRight: 24,
     paddingBottom: 24,
     paddingLeft: 24
   },
-  button: {},
-  view1: { alignSelf: "stretch", height: 8 },
-  button2: {}
+  button: {
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-start"
+  },
+  view1: {
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+    flexDirection: "column",
+    justifyContent: "flex-start",
+    height: 8
+  },
+  button2: {
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+    flex: 1,
+    flexDirection: "row",
+    justifyContent: "flex-start"
+  }
 })

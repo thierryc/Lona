@@ -7,7 +7,17 @@ public class ColorBrowser: NSBox {
 
   // MARK: Lifecycle
 
-  public init() {
+  public init(
+    onSelectColor: ColorHandler,
+    onDeleteColor: ColorHandler,
+    colors: ColorList,
+    onMoveColor: ItemMoveHandler)
+  {
+    self.onSelectColor = onSelectColor
+    self.onDeleteColor = onDeleteColor
+    self.colors = colors
+    self.onMoveColor = onMoveColor
+
     super.init(frame: .zero)
 
     setUpViews()
@@ -16,60 +26,33 @@ public class ColorBrowser: NSBox {
     update()
   }
 
+  public convenience init() {
+    self.init(onSelectColor: nil, onDeleteColor: nil, colors: nil, onMoveColor: nil)
+  }
+
   public required init?(coder aDecoder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
   }
 
+  // MARK: Public
+
+  public var onSelectColor: ColorHandler { didSet { update() } }
+  public var onDeleteColor: ColorHandler { didSet { update() } }
+  public var colors: ColorList { didSet { update() } }
+  public var onClickAddColor: (() -> Void)? { didSet { update() } }
+  public var onMoveColor: ItemMoveHandler { didSet { update() } }
+
   // MARK: Private
 
   private var innerView = NSBox()
+  private var headerView = NSBox()
   private var titleView = NSTextField(labelWithString: "")
   private var spacerView = NSBox()
+  private var fixedHeightFixButtonContainerView = NSBox()
+  private var addColorButtonView = Button()
   private var colorPreviewCollectionView = ColorPreviewCollection()
 
   private var titleViewTextStyle = TextStyles.title
-
-  private var topPadding: CGFloat = 48
-  private var trailingPadding: CGFloat = 64
-  private var bottomPadding: CGFloat = 48
-  private var leadingPadding: CGFloat = 64
-  private var innerViewTopMargin: CGFloat = 0
-  private var innerViewTrailingMargin: CGFloat = 0
-  private var innerViewBottomMargin: CGFloat = 0
-  private var innerViewLeadingMargin: CGFloat = 0
-  private var innerViewTopPadding: CGFloat = 0
-  private var innerViewTrailingPadding: CGFloat = 0
-  private var innerViewBottomPadding: CGFloat = 0
-  private var innerViewLeadingPadding: CGFloat = 0
-  private var titleViewTopMargin: CGFloat = 0
-  private var titleViewTrailingMargin: CGFloat = 0
-  private var titleViewBottomMargin: CGFloat = 0
-  private var titleViewLeadingMargin: CGFloat = 0
-  private var spacerViewTopMargin: CGFloat = 0
-  private var spacerViewTrailingMargin: CGFloat = 0
-  private var spacerViewBottomMargin: CGFloat = 0
-  private var spacerViewLeadingMargin: CGFloat = 0
-  private var colorPreviewCollectionViewTopMargin: CGFloat = 0
-  private var colorPreviewCollectionViewTrailingMargin: CGFloat = 0
-  private var colorPreviewCollectionViewBottomMargin: CGFloat = 0
-  private var colorPreviewCollectionViewLeadingMargin: CGFloat = 0
-
-  private var innerViewTopAnchorConstraint: NSLayoutConstraint?
-  private var innerViewBottomAnchorConstraint: NSLayoutConstraint?
-  private var innerViewLeadingAnchorConstraint: NSLayoutConstraint?
-  private var innerViewCenterXAnchorConstraint: NSLayoutConstraint?
-  private var innerViewTrailingAnchorConstraint: NSLayoutConstraint?
-  private var titleViewTopAnchorConstraint: NSLayoutConstraint?
-  private var titleViewLeadingAnchorConstraint: NSLayoutConstraint?
-  private var titleViewTrailingAnchorConstraint: NSLayoutConstraint?
-  private var spacerViewTopAnchorConstraint: NSLayoutConstraint?
-  private var spacerViewLeadingAnchorConstraint: NSLayoutConstraint?
-  private var spacerViewTrailingAnchorConstraint: NSLayoutConstraint?
-  private var colorPreviewCollectionViewBottomAnchorConstraint: NSLayoutConstraint?
-  private var colorPreviewCollectionViewTopAnchorConstraint: NSLayoutConstraint?
-  private var colorPreviewCollectionViewLeadingAnchorConstraint: NSLayoutConstraint?
-  private var colorPreviewCollectionViewTrailingAnchorConstraint: NSLayoutConstraint?
-  private var spacerViewHeightAnchorConstraint: NSLayoutConstraint?
 
   private func setUpViews() {
     boxType = .custom
@@ -78,82 +61,104 @@ public class ColorBrowser: NSBox {
     innerView.boxType = .custom
     innerView.borderType = .noBorder
     innerView.contentViewMargins = .zero
+    headerView.boxType = .custom
+    headerView.borderType = .noBorder
+    headerView.contentViewMargins = .zero
     titleView.lineBreakMode = .byWordWrapping
     spacerView.boxType = .custom
     spacerView.borderType = .noBorder
     spacerView.contentViewMargins = .zero
+    fixedHeightFixButtonContainerView.boxType = .custom
+    fixedHeightFixButtonContainerView.borderType = .noBorder
+    fixedHeightFixButtonContainerView.contentViewMargins = .zero
 
     addSubview(innerView)
-    innerView.addSubview(titleView)
-    innerView.addSubview(spacerView)
+    innerView.addSubview(headerView)
     innerView.addSubview(colorPreviewCollectionView)
+    headerView.addSubview(titleView)
+    headerView.addSubview(spacerView)
+    headerView.addSubview(fixedHeightFixButtonContainerView)
+    fixedHeightFixButtonContainerView.addSubview(addColorButtonView)
 
+    fillColor = Colors.white
     titleView.attributedStringValue = titleViewTextStyle.apply(to: "Colors")
     titleViewTextStyle = TextStyles.title
     titleView.attributedStringValue = titleViewTextStyle.apply(to: titleView.attributedStringValue)
+    addColorButtonView.titleText = "Add Color"
   }
 
   private func setUpConstraints() {
     translatesAutoresizingMaskIntoConstraints = false
     innerView.translatesAutoresizingMaskIntoConstraints = false
+    headerView.translatesAutoresizingMaskIntoConstraints = false
+    colorPreviewCollectionView.translatesAutoresizingMaskIntoConstraints = false
     titleView.translatesAutoresizingMaskIntoConstraints = false
     spacerView.translatesAutoresizingMaskIntoConstraints = false
-    colorPreviewCollectionView.translatesAutoresizingMaskIntoConstraints = false
+    fixedHeightFixButtonContainerView.translatesAutoresizingMaskIntoConstraints = false
+    addColorButtonView.translatesAutoresizingMaskIntoConstraints = false
 
-    let innerViewTopAnchorConstraint = innerView
-      .topAnchor
-      .constraint(equalTo: topAnchor, constant: topPadding + innerViewTopMargin)
-    let innerViewBottomAnchorConstraint = innerView
-      .bottomAnchor
-      .constraint(equalTo: bottomAnchor, constant: -(bottomPadding + innerViewBottomMargin))
-    let innerViewLeadingAnchorConstraint = innerView
-      .leadingAnchor
-      .constraint(equalTo: leadingAnchor, constant: leadingPadding + innerViewLeadingMargin)
-    let innerViewCenterXAnchorConstraint = innerView.centerXAnchor.constraint(equalTo: centerXAnchor, constant: 0)
-    let innerViewTrailingAnchorConstraint = innerView
-      .trailingAnchor
-      .constraint(equalTo: trailingAnchor, constant: -(trailingPadding + innerViewTrailingMargin))
-    let titleViewTopAnchorConstraint = titleView
-      .topAnchor
-      .constraint(equalTo: innerView.topAnchor, constant: innerViewTopPadding + titleViewTopMargin)
-    let titleViewLeadingAnchorConstraint = titleView
-      .leadingAnchor
-      .constraint(equalTo: innerView.leadingAnchor, constant: innerViewLeadingPadding + titleViewLeadingMargin)
-    let titleViewTrailingAnchorConstraint = titleView
-      .trailingAnchor
-      .constraint(
-        lessThanOrEqualTo: innerView.trailingAnchor,
-        constant: -(innerViewTrailingPadding + titleViewTrailingMargin))
-    let spacerViewTopAnchorConstraint = spacerView
-      .topAnchor
-      .constraint(equalTo: titleView.bottomAnchor, constant: titleViewBottomMargin + spacerViewTopMargin)
-    let spacerViewLeadingAnchorConstraint = spacerView
-      .leadingAnchor
-      .constraint(equalTo: innerView.leadingAnchor, constant: innerViewLeadingPadding + spacerViewLeadingMargin)
-    let spacerViewTrailingAnchorConstraint = spacerView
-      .trailingAnchor
-      .constraint(equalTo: innerView.trailingAnchor, constant: -(innerViewTrailingPadding + spacerViewTrailingMargin))
+    let innerViewTopAnchorConstraint = innerView.topAnchor.constraint(equalTo: topAnchor, constant: 48)
+    let innerViewBottomAnchorConstraint = innerView.bottomAnchor.constraint(equalTo: bottomAnchor)
+    let innerViewLeadingAnchorConstraint = innerView.leadingAnchor.constraint(equalTo: leadingAnchor)
+    let innerViewCenterXAnchorConstraint = innerView.centerXAnchor.constraint(equalTo: centerXAnchor)
+    let innerViewTrailingAnchorConstraint = innerView.trailingAnchor.constraint(equalTo: trailingAnchor)
+    let headerViewTopAnchorConstraint = headerView.topAnchor.constraint(equalTo: innerView.topAnchor)
+    let headerViewLeadingAnchorConstraint = headerView.leadingAnchor.constraint(equalTo: innerView.leadingAnchor)
+    let headerViewTrailingAnchorConstraint = headerView.trailingAnchor.constraint(equalTo: innerView.trailingAnchor)
     let colorPreviewCollectionViewBottomAnchorConstraint = colorPreviewCollectionView
       .bottomAnchor
-      .constraint(
-        equalTo: innerView.bottomAnchor,
-        constant: -(innerViewBottomPadding + colorPreviewCollectionViewBottomMargin))
+      .constraint(equalTo: innerView.bottomAnchor)
     let colorPreviewCollectionViewTopAnchorConstraint = colorPreviewCollectionView
       .topAnchor
-      .constraint(
-        equalTo: spacerView.bottomAnchor,
-        constant: spacerViewBottomMargin + colorPreviewCollectionViewTopMargin)
+      .constraint(equalTo: headerView.bottomAnchor)
     let colorPreviewCollectionViewLeadingAnchorConstraint = colorPreviewCollectionView
       .leadingAnchor
-      .constraint(
-        equalTo: innerView.leadingAnchor,
-        constant: innerViewLeadingPadding + colorPreviewCollectionViewLeadingMargin)
+      .constraint(equalTo: innerView.leadingAnchor)
     let colorPreviewCollectionViewTrailingAnchorConstraint = colorPreviewCollectionView
       .trailingAnchor
-      .constraint(
-        equalTo: innerView.trailingAnchor,
-        constant: -(innerViewTrailingPadding + colorPreviewCollectionViewTrailingMargin))
-    let spacerViewHeightAnchorConstraint = spacerView.heightAnchor.constraint(equalToConstant: 24)
+      .constraint(equalTo: innerView.trailingAnchor)
+    let headerViewHeightAnchorConstraint = headerView.heightAnchor.constraint(equalToConstant: 38)
+    let titleViewLeadingAnchorConstraint = titleView
+      .leadingAnchor
+      .constraint(equalTo: headerView.leadingAnchor, constant: 64)
+    let titleViewTopAnchorConstraint = titleView.topAnchor.constraint(equalTo: headerView.topAnchor)
+    let titleViewCenterYAnchorConstraint = titleView.centerYAnchor.constraint(equalTo: headerView.centerYAnchor)
+    let titleViewBottomAnchorConstraint = titleView.bottomAnchor.constraint(equalTo: headerView.bottomAnchor)
+    let spacerViewLeadingAnchorConstraint = spacerView.leadingAnchor.constraint(equalTo: titleView.trailingAnchor)
+    let spacerViewCenterYAnchorConstraint = spacerView.centerYAnchor.constraint(equalTo: headerView.centerYAnchor)
+    let fixedHeightFixButtonContainerViewTrailingAnchorConstraint = fixedHeightFixButtonContainerView
+      .trailingAnchor
+      .constraint(equalTo: headerView.trailingAnchor, constant: -64)
+    let fixedHeightFixButtonContainerViewLeadingAnchorConstraint = fixedHeightFixButtonContainerView
+      .leadingAnchor
+      .constraint(equalTo: spacerView.trailingAnchor)
+    let fixedHeightFixButtonContainerViewTopAnchorConstraint = fixedHeightFixButtonContainerView
+      .topAnchor
+      .constraint(equalTo: headerView.topAnchor)
+    let fixedHeightFixButtonContainerViewCenterYAnchorConstraint = fixedHeightFixButtonContainerView
+      .centerYAnchor
+      .constraint(equalTo: headerView.centerYAnchor)
+    let fixedHeightFixButtonContainerViewBottomAnchorConstraint = fixedHeightFixButtonContainerView
+      .bottomAnchor
+      .constraint(equalTo: headerView.bottomAnchor)
+    let spacerViewHeightAnchorConstraint = spacerView.heightAnchor.constraint(equalToConstant: 0)
+    let addColorButtonViewWidthAnchorParentConstraint = addColorButtonView
+      .widthAnchor
+      .constraint(lessThanOrEqualTo: fixedHeightFixButtonContainerView.widthAnchor)
+    let addColorButtonViewTopAnchorConstraint = addColorButtonView
+      .topAnchor
+      .constraint(equalTo: fixedHeightFixButtonContainerView.topAnchor)
+    let addColorButtonViewBottomAnchorConstraint = addColorButtonView
+      .bottomAnchor
+      .constraint(equalTo: fixedHeightFixButtonContainerView.bottomAnchor)
+    let addColorButtonViewLeadingAnchorConstraint = addColorButtonView
+      .leadingAnchor
+      .constraint(equalTo: fixedHeightFixButtonContainerView.leadingAnchor)
+    let addColorButtonViewTrailingAnchorConstraint = addColorButtonView
+      .trailingAnchor
+      .constraint(equalTo: fixedHeightFixButtonContainerView.trailingAnchor)
+
+    addColorButtonViewWidthAnchorParentConstraint.priority = NSLayoutConstraint.Priority.defaultLow
 
     NSLayoutConstraint.activate([
       innerViewTopAnchorConstraint,
@@ -161,54 +166,39 @@ public class ColorBrowser: NSBox {
       innerViewLeadingAnchorConstraint,
       innerViewCenterXAnchorConstraint,
       innerViewTrailingAnchorConstraint,
-      titleViewTopAnchorConstraint,
-      titleViewLeadingAnchorConstraint,
-      titleViewTrailingAnchorConstraint,
-      spacerViewTopAnchorConstraint,
-      spacerViewLeadingAnchorConstraint,
-      spacerViewTrailingAnchorConstraint,
+      headerViewTopAnchorConstraint,
+      headerViewLeadingAnchorConstraint,
+      headerViewTrailingAnchorConstraint,
       colorPreviewCollectionViewBottomAnchorConstraint,
       colorPreviewCollectionViewTopAnchorConstraint,
       colorPreviewCollectionViewLeadingAnchorConstraint,
       colorPreviewCollectionViewTrailingAnchorConstraint,
-      spacerViewHeightAnchorConstraint
+      headerViewHeightAnchorConstraint,
+      titleViewLeadingAnchorConstraint,
+      titleViewTopAnchorConstraint,
+      titleViewCenterYAnchorConstraint,
+      titleViewBottomAnchorConstraint,
+      spacerViewLeadingAnchorConstraint,
+      spacerViewCenterYAnchorConstraint,
+      fixedHeightFixButtonContainerViewTrailingAnchorConstraint,
+      fixedHeightFixButtonContainerViewLeadingAnchorConstraint,
+      fixedHeightFixButtonContainerViewTopAnchorConstraint,
+      fixedHeightFixButtonContainerViewCenterYAnchorConstraint,
+      fixedHeightFixButtonContainerViewBottomAnchorConstraint,
+      spacerViewHeightAnchorConstraint,
+      addColorButtonViewWidthAnchorParentConstraint,
+      addColorButtonViewTopAnchorConstraint,
+      addColorButtonViewBottomAnchorConstraint,
+      addColorButtonViewLeadingAnchorConstraint,
+      addColorButtonViewTrailingAnchorConstraint
     ])
-
-    self.innerViewTopAnchorConstraint = innerViewTopAnchorConstraint
-    self.innerViewBottomAnchorConstraint = innerViewBottomAnchorConstraint
-    self.innerViewLeadingAnchorConstraint = innerViewLeadingAnchorConstraint
-    self.innerViewCenterXAnchorConstraint = innerViewCenterXAnchorConstraint
-    self.innerViewTrailingAnchorConstraint = innerViewTrailingAnchorConstraint
-    self.titleViewTopAnchorConstraint = titleViewTopAnchorConstraint
-    self.titleViewLeadingAnchorConstraint = titleViewLeadingAnchorConstraint
-    self.titleViewTrailingAnchorConstraint = titleViewTrailingAnchorConstraint
-    self.spacerViewTopAnchorConstraint = spacerViewTopAnchorConstraint
-    self.spacerViewLeadingAnchorConstraint = spacerViewLeadingAnchorConstraint
-    self.spacerViewTrailingAnchorConstraint = spacerViewTrailingAnchorConstraint
-    self.colorPreviewCollectionViewBottomAnchorConstraint = colorPreviewCollectionViewBottomAnchorConstraint
-    self.colorPreviewCollectionViewTopAnchorConstraint = colorPreviewCollectionViewTopAnchorConstraint
-    self.colorPreviewCollectionViewLeadingAnchorConstraint = colorPreviewCollectionViewLeadingAnchorConstraint
-    self.colorPreviewCollectionViewTrailingAnchorConstraint = colorPreviewCollectionViewTrailingAnchorConstraint
-    self.spacerViewHeightAnchorConstraint = spacerViewHeightAnchorConstraint
-
-    // For debugging
-    innerViewTopAnchorConstraint.identifier = "innerViewTopAnchorConstraint"
-    innerViewBottomAnchorConstraint.identifier = "innerViewBottomAnchorConstraint"
-    innerViewLeadingAnchorConstraint.identifier = "innerViewLeadingAnchorConstraint"
-    innerViewCenterXAnchorConstraint.identifier = "innerViewCenterXAnchorConstraint"
-    innerViewTrailingAnchorConstraint.identifier = "innerViewTrailingAnchorConstraint"
-    titleViewTopAnchorConstraint.identifier = "titleViewTopAnchorConstraint"
-    titleViewLeadingAnchorConstraint.identifier = "titleViewLeadingAnchorConstraint"
-    titleViewTrailingAnchorConstraint.identifier = "titleViewTrailingAnchorConstraint"
-    spacerViewTopAnchorConstraint.identifier = "spacerViewTopAnchorConstraint"
-    spacerViewLeadingAnchorConstraint.identifier = "spacerViewLeadingAnchorConstraint"
-    spacerViewTrailingAnchorConstraint.identifier = "spacerViewTrailingAnchorConstraint"
-    colorPreviewCollectionViewBottomAnchorConstraint.identifier = "colorPreviewCollectionViewBottomAnchorConstraint"
-    colorPreviewCollectionViewTopAnchorConstraint.identifier = "colorPreviewCollectionViewTopAnchorConstraint"
-    colorPreviewCollectionViewLeadingAnchorConstraint.identifier = "colorPreviewCollectionViewLeadingAnchorConstraint"
-    colorPreviewCollectionViewTrailingAnchorConstraint.identifier = "colorPreviewCollectionViewTrailingAnchorConstraint"
-    spacerViewHeightAnchorConstraint.identifier = "spacerViewHeightAnchorConstraint"
   }
 
-  private func update() {}
+  private func update() {
+    colorPreviewCollectionView.onSelectColor = onSelectColor
+    colorPreviewCollectionView.onDeleteColor = onDeleteColor
+    colorPreviewCollectionView.colors = colors
+    addColorButtonView.onClick = onClickAddColor
+    colorPreviewCollectionView.onMoveColor = onMoveColor
+  }
 }

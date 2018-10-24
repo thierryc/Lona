@@ -30,6 +30,26 @@ class WorkspacePreferencesViewController: NSViewController, MASPreferencesViewCo
     func render() {
         stackView.arrangedSubviews.forEach({ $0.removeFromSuperview() })
 
+        let workspaceIconRow = ValueSettingRow(
+            title: "Workspace Icon",
+            value: CSWorkspacePreferences.workspaceIconPathValue, onChange: { value in
+                CSWorkspacePreferences.workspaceIconPathValue = CSValue(type: CSWorkspacePreferences.optionalURLType, data: value)
+                CSWorkspacePreferences.save()
+
+                LonaPlugins.current.trigger(eventType: .onReloadWorkspace)
+
+                self.render()
+        })
+
+        let compilerPathRow = ValueSettingRow(
+            title: "Custom Compiler Path",
+            value: CSUserPreferences.compilerPathValue, onChange: { value in
+                CSUserPreferences.compilerPathValue = CSValue(type: CSUserPreferences.optionalURLType, data: value)
+                CSUserPreferences.save()
+
+                self.render()
+        })
+
         let colorsPathRow = ValueSettingRow(
             title: "Custom Colors Path",
             value: CSWorkspacePreferences.colorsFilePathValue, onChange: { value in
@@ -53,13 +73,8 @@ class WorkspacePreferencesViewController: NSViewController, MASPreferencesViewCo
         })
 
         let views = [
-            PathSettingRow(title: "Workspace Path", value: CSUserPreferences.workspaceURL.path, onChange: { value in
-                CSUserPreferences.workspaceURL = URL(fileURLWithPath: value.stringValue, isDirectory: true)
-
-                CSWorkspacePreferences.reloadAllConfigurationFiles(closeDocuments: true)
-
-                self.render()
-            }),
+            workspaceIconRow,
+            compilerPathRow,
             colorsPathRow,
             textStylesPathRow
         ]

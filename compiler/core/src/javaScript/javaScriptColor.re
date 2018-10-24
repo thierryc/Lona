@@ -4,18 +4,21 @@ let render = colors => {
   let propertyDoc = (color: Color.t) => {
     let property =
       Property({
-        "key": Identifier([color.id]),
-        "value": Literal(LonaValue.string(color.value))
+        key: Identifier([color.id]),
+        value: Literal(LonaValue.string(color.value)),
       });
-    switch color.comment {
-    | Some(comment) => LineEndComment({"comment": comment, "line": property})
-    | None => property
+    switch (color.comment) {
+    | None
+    | Some("") => property
+    | Some(comment) => LineEndComment({comment, line: property})
     };
   };
   let doc =
     Program([
-      ExportDefaultDeclaration(ObjectLiteral(colors |> List.map(propertyDoc))),
-      Empty
+      ExportDefaultDeclaration(
+        ObjectLiteral(colors |> List.map(propertyDoc)),
+      ),
+      Empty,
     ]);
   JavaScriptRender.toString(doc);
 };

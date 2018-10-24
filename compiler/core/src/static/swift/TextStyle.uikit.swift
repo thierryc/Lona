@@ -6,9 +6,9 @@ public class TextStyle {
   public let name: String?
   public let weight: UIFont.Weight
   public let size: CGFloat
-  public let lineHeight: CGFloat
+  public let lineHeight: CGFloat?
   public let kerning: Double
-  public let color: UIColor
+  public let color: UIColor?
   public let alignment: NSTextAlignment
 
   public init(
@@ -18,13 +18,13 @@ public class TextStyle {
     size: CGFloat = UIFont.systemFontSize,
     lineHeight: CGFloat? = nil,
     kerning: Double = 0,
-    color: UIColor = UIColor.black,
+    color: UIColor? = nil,
     alignment: NSTextAlignment = .left) {
     self.family = family
     self.name = name
     self.weight = weight
     self.size = size
-    self.lineHeight = lineHeight ?? size * 1.5
+    self.lineHeight = lineHeight
     self.kerning = kerning
     self.color = color
     self.alignment = alignment
@@ -53,8 +53,10 @@ public class TextStyle {
 
   public lazy var paragraphStyle: NSMutableParagraphStyle = {
     let paragraphStyle = NSMutableParagraphStyle()
-    paragraphStyle.minimumLineHeight = lineHeight
-    paragraphStyle.maximumLineHeight = lineHeight
+    if let lineHeight = lineHeight {
+      paragraphStyle.minimumLineHeight = lineHeight
+      paragraphStyle.maximumLineHeight = lineHeight
+    }
     paragraphStyle.alignment = alignment
     return paragraphStyle
   }()
@@ -82,12 +84,17 @@ public class TextStyle {
   }()
 
   public lazy var attributeDictionary: [NSAttributedStringKey: Any] = {
-    return [
+    var attributes: [NSAttributedStringKey: Any] = [
       .font: uiFont,
-      .foregroundColor: color,
       .kern: kerning,
       .paragraphStyle: paragraphStyle
     ]
+
+    if let color = color {
+      attributes[.foregroundColor] = color
+    }
+
+    return attributes
   }()
 
   public func apply(to string: String) -> NSAttributedString {

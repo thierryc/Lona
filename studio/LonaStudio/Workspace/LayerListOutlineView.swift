@@ -1,97 +1,13 @@
 //
-//  LayerList.swift
-//  ComponentStudio
+//  LayerListOutlineView.swift
+//  LonaStudio
 //
 //  Created by Devin Abbott on 5/7/17.
 //  Copyright © 2017 Devin Abbott. All rights reserved.
 //
 
+import AppKit
 import Foundation
-import Cocoa
-
-enum LayerListAction {
-    case render
-    case clearInspector
-    case renderInspector(DataNode)
-}
-
-protocol LayerListDelegate: class {
-    func layerList(_ layerList: LayerListOutlineView, do action: LayerListAction)
-}
-
-public class LayerList: NSBox {
-
-    // MARK: Lifecycle
-
-    init() {
-        super.init(frame: .zero)
-
-        setUpViews()
-        setUpConstraints()
-
-        update()
-    }
-
-    public required init?(coder decoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    // MARK: Public
-
-    var component: CSComponent? { didSet { update() } }
-
-    var onChange: (() -> Void)? {
-        get { return outlineView.onChange }
-        set { outlineView.onChange = newValue }
-    }
-
-    var onSelectLayer: ((CSLayer?) -> Void)? {
-        get { return outlineView.onSelectLayer }
-        set { outlineView.onSelectLayer = newValue }
-    }
-
-    func addLayer(layer newLayer: CSLayer) {
-        outlineView.addLayer(layer: newLayer)
-    }
-
-    func reloadWithoutModifyingSelection() {
-        outlineView.render(fullRender: false)
-    }
-
-    // MARK: Private
-
-    private var outlineView = LayerListOutlineView()
-    private var scrollView = NSScrollView(frame: .zero)
-
-    private func setUpViews() {
-        boxType = .custom
-        borderType = .noBorder
-        contentViewMargins = .zero
-
-//        scrollView.hasVerticalScroller = true
-        scrollView.drawsBackground = false
-        scrollView.addSubview(outlineView)
-        scrollView.documentView = outlineView
-
-        outlineView.sizeToFit()
-
-        addSubview(scrollView)
-    }
-
-    private func setUpConstraints() {
-        translatesAutoresizingMaskIntoConstraints = false
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-
-        topAnchor.constraint(equalTo: scrollView.topAnchor).isActive = true
-        bottomAnchor.constraint(equalTo: scrollView.bottomAnchor).isActive = true
-        leadingAnchor.constraint(equalTo: scrollView.leadingAnchor).isActive = true
-        trailingAnchor.constraint(equalTo: scrollView.trailingAnchor).isActive = true
-    }
-
-    private func update() {
-        outlineView.component = component
-    }
-}
 
 final class LayerListOutlineView: NSOutlineView, NSTextFieldDelegate {
 
@@ -152,7 +68,7 @@ final class LayerListOutlineView: NSOutlineView, NSTextFieldDelegate {
             parent = targetLayer
             index = parent.children.count
         } else {
-            parent = self.parent(forItem: targetLayer) as! CSLayer
+            parent = self.parent(forItem: targetLayer) as? CSLayer
             index = self.childIndex(forItem: targetLayer) + 1
         }
 
@@ -381,7 +297,7 @@ extension LayerListOutlineView {
 
         let document = ComponentDocument()
 
-        document.file = CSComponent(name: layer.name, canvas: component?.canvas ?? [], rootLayer: layer, parameters: [], cases: [CSCase.defaultCase], logic: [], config: component?.config ?? CSData.Object([:]), metadata: component?.metadata ?? CSData.Object([:]))
+        document.component = CSComponent(name: layer.name, canvas: component?.canvas ?? [], rootLayer: layer, parameters: [], cases: [CSCase.defaultCase], logic: [], config: component?.config ?? CSData.Object([:]), metadata: component?.metadata ?? CSData.Object([:]))
 
         Swift.print("Writing to", url)
 
@@ -412,7 +328,7 @@ extension LayerListOutlineView {
         guard let url = requestSaveFileURL() else { return }
 
         let document = ComponentDocument()
-        document.file = existingComponent
+        document.component = existingComponent
 
         do {
             try document.write(to: url, ofType: ".component")
@@ -422,7 +338,7 @@ extension LayerListOutlineView {
 
         NSDocumentController.shared.openDocument(
             withContentsOf: url, display: true, completionHandler: { (document, _, _) in
-            layer.component = (document as! ComponentDocument).file!
+            layer.component = (document as! ComponentDocument).component!
             layer.name = CSComponent.componentName(from: url)
             layer.type = CSLayer.LayerType.custom(url.deletingPathExtension().lastPathComponent)
             self.onChange?()

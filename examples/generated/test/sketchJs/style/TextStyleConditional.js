@@ -3,20 +3,21 @@ import { Text, View, StyleSheet, TextStyles } from
   "@mathieudutour/react-sketchapp"
 
 import colors from "../colors"
+import shadows from "../shadows"
 import textStyles from "../textStyles"
 
 export default class TextStyleConditional extends React.Component {
   render() {
+
     let Text$textStyle
+    Text$textStyle = textStyles.headline
+
     if (this.props.large) {
-      Text$textStyle = "display2"
+      Text$textStyle = textStyles.display2
     }
     return (
-      <View style={[ styles.view, {} ]}>
-        <Text
-          style={[ styles.text, { font: Text$textStyle } ]}
-          text={"Text goes here"}
-        >
+      <View style={styles.view}>
+        <Text style={[ styles.text, { ...Text$textStyle } ]}>
           {"Text goes here"}
         </Text>
       </View>
@@ -25,6 +26,18 @@ export default class TextStyleConditional extends React.Component {
 };
 
 let styles = StyleSheet.create({
-  view: { alignSelf: "stretch" },
-  text: { ...TextStyles.get("headline") }
+  view: {
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+    flex: 0,
+    flexDirection: "column",
+    justifyContent: "flex-start"
+  },
+  text: {
+    ...TextStyles.get("headline"),
+    alignItems: "flex-start",
+    flex: 0,
+    flexDirection: "column",
+    justifyContent: "flex-start"
+  }
 })

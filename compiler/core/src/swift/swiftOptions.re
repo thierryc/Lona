@@ -9,4 +9,8 @@ let frameworkToString =
   | AppKit => "appkit";
 
 [@bs.deriving jsConverter]
-type options = {framework};
+type options = {
+  framework,
+  debugConstraints: bool,
+  typePrefix: string,
+};

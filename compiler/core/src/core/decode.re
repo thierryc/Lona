@@ -7,7 +7,7 @@ exception UnknownParameter(string);
 exception UnknownType(string);
 
 let parameterType = key =>
-  switch key {
+  switch (key) {
   | ParameterKey.Text => Types.stringType
   | Visible => Types.booleanType
   | NumberOfLines => Types.numberType
@@ -16,6 +16,7 @@ let parameterType = key =>
   /* Styles */
   | AlignItems => Types.stringType
   | AlignSelf => Types.stringType
+  | Display => Types.stringType
   | Flex => Types.numberType
   | FlexDirection => Types.stringType
   | TextAlign => Types.stringType
@@ -34,6 +35,7 @@ let parameterType = key =>
   | Width => Types.numberType
   | Height => Types.numberType
   | TextStyle => Types.textStyleType
+  | Shadow => Types.shadowType
   /* Interactivity */
   | Pressed => Types.booleanType
   | Hovered => Types.booleanType
@@ -55,7 +57,7 @@ module Types = {
     let functionType = json => {
       let argumentType = json => {
         "label": field("label", string, json),
-        "type": field("type", lonaType, json)
+        "type": field("type", lonaType, json),
       };
       let arguments =
         switch (json |> optional(field("arguments", list(argumentType)))) {
@@ -64,7 +66,8 @@ module Types = {
         };
       let returnType =
         switch (
-          json |> optional(field("arguments", field("returnType", lonaType)))
+          json
+          |> optional(field("arguments", field("returnType", lonaType)))
         ) {
         | Some(decoded) => decoded
         | None => Types.undefinedType
@@ -74,7 +77,7 @@ module Types = {
     let referenceType = json => json |> string |> (x => Reference(x));
     let otherType = json => {
       let name = field("name", string, json);
-      switch name {
+      switch (name) {
       | "Named" => namedType(json)
       | "Function" => functionType(json)
       | _ => raise(UnknownType(name))
@@ -84,12 +87,95 @@ module Types = {
   };
 };
 
+module Styles = {
+  let optionalLonaValue = (name, ltype, json) =>
+    switch (json |> optional(field(name, x => x))) {
+    | Some(data) => Some({data, ltype})
+    | None => None
+    };
+  let border = json: Styles.border(option(lonaValue)) => {
+    borderRadius: json |> optionalLonaValue("borderRadius", numberType),
+    borderWidth: json |> optionalLonaValue("borderWidth", numberType),
+    borderColor: json |> optionalLonaValue("borderColor", colorType),
+  };
+  let edgeInsets = (prefix, json): Styles.edgeInsets(option(lonaValue)) => {
+    top: json |> optionalLonaValue(prefix ++ "Top", numberType),
+    right: json |> optionalLonaValue(prefix ++ "Right", numberType),
+    bottom: json |> optionalLonaValue(prefix ++ "Bottom", numberType),
+    left: json |> optionalLonaValue(prefix ++ "Left", numberType),
+  };
+  let flexLayout = json: Styles.flexLayout(option(lonaValue)) => {
+    alignItems: json |> optionalLonaValue("alignItems", stringType),
+    alignSelf: json |> optionalLonaValue("alignSelf", stringType),
+    display: json |> optionalLonaValue("display", stringType),
+    justifyContent: json |> optionalLonaValue("justifyContent", stringType),
+    flexDirection: json |> optionalLonaValue("flexDirection", stringType),
+    flex: json |> optionalLonaValue("flex", numberType),
+    width: json |> optionalLonaValue("width", numberType),
+    height: json |> optionalLonaValue("height", numberType),
+  };
+  let layout = json: Styles.layout(option(lonaValue)) => {
+    flex: json |> flexLayout,
+    padding: json |> edgeInsets("padding"),
+    margin: json |> edgeInsets("margin"),
+  };
+  let textStyles = json: Styles.textStyles(option(lonaValue)) => {
+    textAlign: json |> optionalLonaValue("textAlign", stringType),
+    textStyle: json |> optionalLonaValue("textStyle", stringType),
+  };
+  let viewLayerStyles = json: Styles.viewLayerStyles(option(lonaValue)) => {
+    layout: json |> layout,
+    border: json |> border,
+    backgroundColor: json |> optionalLonaValue("backgroundColor", colorType),
+    textStyles: json |> textStyles,
+  };
+  let styleSets = json: list(Styles.namedStyles(option(lonaValue))) =>
+    json
+    |> Js.Json.decodeObject
+    |> Js.Option.getExn
+    |> Js.Dict.entries
+    |> (
+      x =>
+        Array.to_list(x)
+        |> List.map(pair => {
+             let (name, styleSet) = pair;
+             (
+               {name, styles: styleSet |> viewLayerStyles}:
+                 Styles.namedStyles(option(lonaValue))
+             );
+           })
+    );
+};
+
 module Parameters = {
   let parameterKey = json => json |> string |> ParameterKey.fromString;
   let parameter = json => {
     name: json |> field("name", parameterKey),
     ltype: json |> field("type", Types.lonaType),
-    defaultValue: json |> optional(field("defaultValue", x => x))
+    defaultValue: json |> optional(field("defaultValue", x => x)),
+  };
+};
+
+module Metadata = {
+  let optionalFieldString = (key, decoder, json) =>
+    switch (optional(field(key, x => x), json)) {
+    | Some(data) => optional(decoder, data)
+    | None => None
+    };
+  let emptyPlatformSpecificValue = (): platformSpecificValue(option('a)) => {
+    iOS: None,
+    macOS: None,
+    reactDom: None,
+    reactNative: None,
+    reactSketchapp: None,
+  };
+  let platformSpecificValue =
+      (json: Js.Json.t): platformSpecificValue(option('a)) => {
+    iOS: optionalFieldString("ios", string, json),
+    macOS: optionalFieldString("macos", string, json),
+    reactDom: optionalFieldString("reactdom", string, json),
+    reactNative: optionalFieldString("reactnative", string, json),
+    reactSketchapp: optionalFieldString("reactSketchapp", string, json),
   };
 };
 
@@ -99,6 +185,7 @@ module Layer = {
     | "Lona:View" => View
     | "Lona:Text" => Text
     | "Lona:Image" => Image
+    | "Lona:VectorGraphic" => VectorGraphic
     | "Lona:Animation" => Animation
     | "Lona:Children" => Children
     | value => Component(value)
@@ -110,15 +197,22 @@ module Layer = {
       |> Js.Json.decodeObject
       |> Js.Option.getExn
       |> ParameterMap.fromJsDict
+      |> ParameterMap.filter((key, value) =>
+           switch (key) {
+           | Custom("styles") => false
+           | _ => true
+           }
+         )
       |> ParameterMap.mapi((key, value) =>
-           switch typeName {
+           switch (typeName) {
            | Component(name) =>
              let param =
                getComponent(name)
                |> field("params", list(Parameters.parameter))
                |> List.find((param: parameter) => param.name == key);
-             switch param {
-             | _ => {ltype: param.ltype, data: value}
+             switch (param) {
+             | _ =>
+               LonaValue.expandDecodedValue({ltype: param.ltype, data: value})
              | exception _ =>
                Js.log2("Unknown built-in parameter when deserializing:", key);
                raise(UnknownParameter(ParameterKey.toString(key)));
@@ -130,19 +224,37 @@ module Layer = {
     {
       typeName,
       name,
+      styles:
+        switch (
+          json |> optional(at(["params", "styles"], Styles.styleSets))
+        ) {
+        | Some(a) => a
+        | None => [LonaCompilerCore.Styles.emptyNamedStyle("normal")]
+        },
       parameters: field("params", parameterDictionary, json),
       children:
-        switch (json |> optional(field("children", list(layer(getComponent))))) {
+        switch (
+          json |> optional(field("children", list(layer(getComponent))))
+        ) {
         | Some(result) => result
         | None => []
         | exception e =>
           Js.log3(
             "Failed to decode children of",
             typeName |> LonaCompilerCore.Types.layerTypeToString,
-            name
+            name,
           );
           raise(e);
-        }
+        },
+      metadata: {
+        backingElementClass:
+          switch (
+            optional(at(["metadata", "backingElementClass"], x => x), json)
+          ) {
+          | Some(data) => Metadata.platformSpecificValue(data)
+          | None => Metadata.emptyPlatformSpecificValue()
+          },
+      },
     };
   };
 };
@@ -151,39 +263,41 @@ exception UnknownExprType(string);
 
 let rec decodeExpr = json => {
   open LonaLogic;
-  let decodePlaceholder = (_) => PlaceholderExpression;
+  let decodePlaceholder = _ => PlaceholderExpression;
   let decodeIdentifier = json => IdentifierExpression(json |> string);
   let decodeMemberExpression = json =>
     MemberExpression(json |> list(decodeExpr));
   let decodeTypedExpr = json => {
     let exprType = json |> field("type", string);
-    switch exprType {
+    switch (exprType) {
     | "AssignExpr" =>
       AssignmentExpression({
         "assignee": json |> field("assignee", decodeExpr),
-        "content": json |> field("content", decodeExpr)
+        "content": json |> field("content", decodeExpr),
       })
     | "IfExpr" =>
       IfExpression({
         "condition": json |> field("condition", decodeExpr),
-        "body": json |> field("body", list(decodeExpr))
+        "body": json |> field("body", list(decodeExpr)),
       })
     | "VarDeclExpr" =>
       VariableDeclarationExpression({
         "content": json |> field("content", decodeExpr),
-        "identifier": json |> field("id", decodeExpr)
+        "identifier": json |> field("id", decodeExpr),
       })
     | "BinExpr" =>
       BinaryExpression({
         "left": json |> field("left", decodeExpr),
         "op": json |> field("op", decodeExpr),
-        "right": json |> field("right", decodeExpr)
+        "right": json |> field("right", decodeExpr),
       })
     | "LitExpr" =>
-      LiteralExpression({
-        ltype: json |> at(["value", "type"], Types.lonaType),
-        data: json |> at(["value", "data"], json => json)
-      })
+      LiteralExpression(
+        LonaValue.expandDecodedValue({
+          ltype: json |> at(["value", "type"], Types.lonaType),
+          data: json |> at(["value", "data"], json => json),
+        }),
+      )
     | _ => raise(UnknownExprType(exprType))
     };
   };
@@ -191,7 +305,7 @@ let rec decodeExpr = json => {
     decodeTypedExpr,
     decodeIdentifier,
     decodeMemberExpression,
-    decodePlaceholder
+    decodePlaceholder,
   ]) @@
   json;
 };
@@ -200,7 +314,7 @@ exception UnknownLogicValue(string);
 
 let rec logicNode = json => {
   let cmp = str =>
-    switch str {
+    switch (str) {
     | "==" => Eq
     | "!=" => Neq
     | ">" => Gt
@@ -210,14 +324,14 @@ let rec logicNode = json => {
     | _ => Unknown
     };
   let identifierFromExpr = expr =>
-    switch expr {
+    switch (expr) {
     | LonaLogic.IdentifierExpression(str) => str
     | _ => raise(UnknownExprType("Expected identifier"))
     };
   let rec logicValueFromExpr = expr =>
-    switch expr {
+    switch (expr) {
     | LonaLogic.MemberExpression(items) =>
-      let ltype = Reference("???");
+      let ltype = Reference("UnknownReferenceType");
       let path = items |> List.map(identifierFromExpr);
       Logic.Identifier(ltype, path);
     | LonaLogic.LiteralExpression(value) => Logic.Literal(value)
@@ -225,23 +339,21 @@ let rec logicNode = json => {
     }
   and fromExpr = expr =>
     LonaLogic.(
-      switch expr {
+      switch (expr) {
       | AssignmentExpression(o) =>
         let content = o##content |> logicValueFromExpr;
         let assignee = o##assignee |> logicValueFromExpr;
         Logic.Assign(content, assignee);
       | IfExpression(o) =>
         let body = o##body |> List.map(fromExpr);
-        switch o##condition {
+        switch (o##condition) {
         | VariableDeclarationExpression(decl) =>
           let id = decl##identifier |> identifierFromExpr;
           let content = decl##content |> logicValueFromExpr;
-          Logic.IfExists(
+          Logic.IfLet(
+            Logic.Identifier(undefinedType, [id]),
             content,
-            Logic.Block([
-              Logic.LetEqual(Logic.Identifier(undefinedType, [id]), content),
-              ...body
-            ])
+            Logic.Block(body),
           );
         | BinaryExpression(bin) =>
           let left = bin##left |> logicValueFromExpr;
@@ -264,24 +376,10 @@ let rec logicNode = json => {
       }
     );
   fromExpr(decodeExpr(json));
-  /* switch (at(["function", "name"], string, json)) {
-     | "assign(lhs, to rhs)" =>
-       Logic.Assign(arg(["lhs"], value), arg(["rhs"], value))
-     | "if(lhs, is cmp, rhs)" =>
-       If(
-         arg(["lhs"], value),
-         arg(["cmp", "value", "data"], cmp),
-         arg(["rhs"], value),
-         Block(nodes)
-       )
-     | "if(value)" => IfExists(arg(["value"], value), Block(nodes))
-     | "add(lhs, to rhs, and assign to value)" =>
-       Add(arg(["lhs"], value), arg(["rhs"], value), arg(["value"], value))
-     | _ => None
-     }; */
 };
 
 module Component = {
+  open Json.Decode;
   let parameters = json => field("params", list(Parameters.parameter), json);
   let rootLayer = (getComponent, json) =>
     field("root", Layer.layer(getComponent), json);

@@ -51,6 +51,7 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
         case view = "View"
         case text = "Text"
         case image = "Image"
+        case vectorGraphic = "VectorGraphic"
         case animation = "Animation"
         case children = "Children"
     }
@@ -92,6 +93,7 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
         static let view = LayerType.builtIn(.view)
         static let text = LayerType.builtIn(.text)
         static let image = LayerType.builtIn(.image)
+        static let vectorGraphic = LayerType.builtIn(.vectorGraphic)
         static let animation = LayerType.builtIn(.animation)
         static let children = LayerType.builtIn(.children)
 
@@ -112,6 +114,7 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
     var children: [CSLayer] = []
     var parent: CSLayer?
     var parameters: [String: CSData] = [:]
+    var metadata: [String: CSData] = [:]
 
     func removeParameter(_ key: String) {
         parameters.removeValue(forKey: key)
@@ -401,6 +404,8 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
         set {
             let widthSizingRules = children.map({ $0.widthSizingRule })
             let heightSizingRules = children.map({ $0.heightSizingRule })
+            let horizontalAlignment = self.horizontalAlignment
+            let verticalAlignment = self.verticalAlignment
 
             // Actually set the value - this will change what children sizingRule getters return
             parameters["flexDirection"] = newValue?.toData()
@@ -411,6 +416,8 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
             for (i, value) in heightSizingRules.enumerated() {
                 children[i].heightSizingRule = value
             }
+            self.horizontalAlignment = horizontalAlignment
+            self.verticalAlignment = verticalAlignment
         }
     }
     var alignItems: String? {
@@ -492,6 +499,7 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
         name = json.get(key: "id").string ?? json.get(key: "name").stringValue
         type = LayerType(json.get(key: "type"))
         parameters = decode(parameters: json.get(key: "params").object ?? json.get(key: "parameters").objectValue)
+        metadata = json.get(key: "metadata").objectValue
         children = json.get(key: "children").arrayValue.map({ CSLayer.deserialize($0) }).compactMap({ $0 })
         children.forEach({ $0.parent = self })
     }
@@ -515,9 +523,12 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
     }
 
     static let defaultParameterValue: [String: CSData] = [
+        "alignItems": CSData.String("flex-start"),
         "borderRadius": CSData.Number(0),
+        "borderWidth": CSData.Number(0),
         "flex": CSData.Number(0),
         "flexDirection": CSData.String("column"),
+        "justifyContent": CSData.String("flex-start"),
         "marginTop": CSData.Number(0),
         "marginRight": CSData.Number(0),
         "marginBottom": CSData.Number(0),
@@ -561,6 +572,10 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
             data["children"] = children.toData()
         }
 
+        if !metadata.isEmpty {
+            data["metadata"] = CSData.Object(metadata)
+        }
+
         return data
     }
 
@@ -598,30 +613,6 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
 
     func appendChild(_ child: CSLayer) {
         insertChild(child, at: children.count)
-    }
-
-    func attributesNames(for type: CSType) -> [String] {
-        if let _self = self as? CSComponentLayer {
-            return _self.component.parameters.filter({ $0.type == type }).map({ $0.name })
-        }
-
-        switch type {
-        case .named("Color", .string):
-            return ["backgroundColor"]
-        case .string:
-            return ["backgroundColor", "text", "image", "font"].sorted()
-        case .number:
-            return [
-                "width",
-                "height",
-                "padding", "paddingVertical", "paddingHorizontal", "paddingLeft", "paddingTop", "paddingRight", "paddingBottom",
-                "margin", "marginVertical", "marginHorizontal", "marginLeft", "marginTop", "marginRight", "marginBottom"
-            ].sorted()
-        case .bool:
-            return ["visible"]
-        default:
-            return []
-        }
     }
 
     func visibleChildren(for config: ComponentConfiguration) -> [CSLayer] {
@@ -664,6 +655,14 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
             // Color
             "backgroundColor": CSData.String(backgroundColor ?? "transparent"),
 
+            // Border
+            "borderWidth": CSData.Number(borderWidth ?? 0),
+            "borderRadius": CSData.Number(borderRadius ?? 0),
+            "borderColor": CSData.String(borderColor ?? "transparent"),
+
+            // Shadow
+            "shadow": CSData.String(shadow ?? ""),
+
             // Children
             "children": CSData.Array([])
         ])
@@ -693,6 +692,15 @@ class CSLayer: CSDataDeserializable, CSDataSerializable, DataNode, NSCopying {
             let assetMap = AnimationUtils.assetMapValue(from: animationData)
             data["images"] = assetMap.data
             valueType = valueType.merge(key: "images", type: assetMap.type, access: .write)
+        }
+
+        // VectorGraphic
+        if type == .vectorGraphic,
+            let image = image,
+            let url = URL(string: image)?.absoluteURLForWorkspaceURL(),
+            let svg = SVG.decodeSync(contentsOf: url) {
+            data["vector"] = SVG.paramsData(node: svg)
+            valueType = valueType.merge(key: "vector", type: SVG.paramsType(node: svg), access: .write)
         }
 
         return CSValue(type: valueType, data: data)

@@ -19,6 +19,7 @@ class CSWorkspacePreferences: CSPreferencesFile {
     enum Keys: String {
         case colorsPath
         case textStylesPath
+        case workspaceIcon
     }
 
     static var url: URL {
@@ -39,6 +40,14 @@ class CSWorkspacePreferences: CSPreferencesFile {
             return url
         }
         return CSUserPreferences.workspaceURL.appendingPathComponent("textStyles.json")
+    }
+
+    static var workspaceIconURL: URL {
+        if let string = workspaceIconPathValue.data.get(key: "data").string,
+            let url = URL(string: string)?.absoluteURLForWorkspaceURL() {
+            return url
+        }
+        return Bundle.main.urlForImageResource(NSImage.Name(rawValue: "default-workspace-thumbnail"))!
     }
 
     static var colorsFilePathValue: CSValue {
@@ -66,6 +75,21 @@ class CSWorkspacePreferences: CSPreferencesFile {
         }
         set {
             CSWorkspacePreferences.data[Keys.textStylesPath.rawValue] = newValue == CSUnitValue
+                ? nil
+                : CSValue.compact(type: optionalURLType, data: newValue.data)
+        }
+    }
+
+    static var workspaceIconPathValue: CSValue {
+        get {
+            if let path = CSWorkspacePreferences.data[Keys.workspaceIcon.rawValue] {
+                return CSValue(type: optionalURLType, data: CSValue.expand(type: optionalURLType, data: path))
+            } else {
+                return CSUnitValue.wrap(in: optionalURLType, tagged: "None")
+            }
+        }
+        set {
+            CSWorkspacePreferences.data[Keys.workspaceIcon.rawValue] = newValue == CSUnitValue
                 ? nil
                 : CSValue.compact(type: optionalURLType, data: newValue.data)
         }
@@ -102,7 +126,7 @@ class CSWorkspacePreferences: CSPreferencesFile {
             return true
         } catch {
             let alert = Alert(
-                items: [CreateWorkspace.cancel, CreateWorkspace.create],
+                items: [CreateWorkspace.create, CreateWorkspace.cancel],
                 messageText: "This doesn't appear to be a Lona workspace!",
                 informativeText: "There's no 'lona.json' file in \(url.path). If you're sure this is a workspace, we can create a 'lona.json' automatically now. Otherwise, press Cancel and open a different directory.")
 

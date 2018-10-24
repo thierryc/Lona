@@ -47,18 +47,19 @@ and typeAnnotation =
       {
         .
         "name": typeAnnotation,
-        "member": typeAnnotation
-      }
+        "member": typeAnnotation,
+      },
     )
-  | ArrayType({. "element": typeAnnotation})
+  | ArrayType(typeAnnotation)
   | DictionaryType(
       {
         .
         "key": typeAnnotation,
-        "value": typeAnnotation
-      }
+        "value": typeAnnotation,
+      },
     )
   | OptionalType(typeAnnotation)
+  | TupleType(list(typeAnnotation))
   | TypeInheritanceList({. "list": list(typeAnnotation)})
 and pattern =
   | WildcardPattern
@@ -66,56 +67,66 @@ and pattern =
       {
         .
         "identifier": node,
-        "annotation": option(typeAnnotation)
-      }
+        "annotation": option(typeAnnotation),
+      },
     )
   | ValueBindingPattern(
       {
         .
         "kind": string,
-        "pattern": pattern
-      }
+        "pattern": pattern,
+      },
     )
-  | TuplePattern({. "elements": list(pattern)})
+  | TuplePattern(list(pattern))
   | OptionalPattern({. "value": pattern})
   | ExpressionPattern({. "value": node})
+  | EnumCasePattern(
+      {
+        .
+        "typeIdentifier": option(string),
+        "caseName": string,
+        "tuplePattern": option(pattern),
+      },
+    )
 /* | IsPattern */
 /* | AsPattern */
 and initializerBlock =
+  | GetterBlock(list(node))
   | WillSetDidSetBlock(
       {
         .
         "willSet": option(list(node)),
-        "didSet": option(list(node))
-      }
+        "didSet": option(list(node)),
+      },
     )
 [@bs.deriving accessors]
 and node =
   /* | Operator(string) */
   | LiteralExpression(literal)
   | MemberExpression(list(node))
+  | TupleExpression(list(node))
   | BinaryExpression(
       {
         .
         "left": node,
         "operator": string,
-        "right": node
-      }
+        "right": node,
+      },
     )
   | PrefixExpression(
       {
         .
         "operator": string,
-        "expression": node
-      }
+        "expression": node,
+      },
     )
   | TryExpression(
       {
         .
         "forced": bool,
         "optional": bool,
-        "expression": node
-      }
+        "expression": node,
+      },
     )
   | ClassDeclaration(
       {
@@ -124,17 +135,35 @@ and node =
         "inherits": list(typeAnnotation),
         "modifier": option(accessLevelModifier),
         "isFinal": bool,
-        "body": list(node)
-      }
+        "body": list(node),
+      },
     )
-  | EnumDeclaration(
+  | StructDeclaration(
       {
         .
         "name": string,
         "inherits": list(typeAnnotation),
         "modifier": option(accessLevelModifier),
-        "body": list(node)
-      }
+        "body": list(node),
+      },
+    )
+  | EnumDeclaration(
+      {
+        .
+        "name": string,
+        "isIndirect": bool,
+        "inherits": list(typeAnnotation),
+        "modifier": option(accessLevelModifier),
+        "body": list(node),
+      },
+    )
+  | TypealiasDeclaration(
+      {
+        .
+        "name": string,
+        "modifier": option(accessLevelModifier),
+        "annotation": typeAnnotation,
+      },
     )
   | ExtensionDeclaration(
       {
@@ -143,8 +172,8 @@ and node =
         "protocols": list(typeAnnotation),
         "where": option(node),
         "modifier": option(accessLevelModifier),
-        "body": list(node)
-      }
+        "body": list(node),
+      },
     )
   /* | VariableDeclaration({. "pattern": pattern, "init": option(node)}) */
   | SwiftIdentifier(string)
@@ -153,8 +182,8 @@ and node =
         .
         "modifiers": list(declarationModifier),
         "pattern": pattern,
-        "init": option(node)
-      }
+        "init": option(node),
+      },
     )
   | VariableDeclaration(
       {
@@ -162,8 +191,8 @@ and node =
         "modifiers": list(declarationModifier),
         "pattern": pattern,
         "init": option(node),
-        "block": option(initializerBlock)
-      }
+        "block": option(initializerBlock),
+      },
     )
   | InitializerDeclaration(
       {
@@ -172,8 +201,8 @@ and node =
         "parameters": list(node),
         "failable": option(string),
         "throws": bool,
-        "body": list(node)
-      }
+        "body": list(node),
+      },
     )
   | DeinitializerDeclaration(list(node))
   | FunctionDeclaration(
@@ -184,17 +213,39 @@ and node =
         "parameters": list(node),
         "result": option(typeAnnotation),
         "body": list(node),
-        "throws": bool
-      }
+        "throws": bool,
+      },
     )
   | ImportDeclaration(string)
   | IfStatement(
       {
         .
         "condition": node,
-        "block": list(node)
-      }
+        "block": list(node),
+      },
     )
+  | WhileStatement(
+      {
+        .
+        "condition": node,
+        "block": list(node),
+      },
+    )
+  | SwitchStatement(
+      {
+        .
+        "expression": node,
+        "cases": list(node),
+      },
+    )
+  | CaseLabel(
+      {
+        .
+        "patterns": list(pattern),
+        "statements": list(node),
+      },
+    )
+  | DefaultCaseLabel({. "statements": list(node)})
   | ReturnStatement(option(node))
   | Parameter(
       {
@@ -202,29 +253,45 @@ and node =
         "externalName": option(string),
         "localName": string,
         "annotation": typeAnnotation,
-        "defaultValue": option(node)
-      }
+        "defaultValue": option(node),
+      },
     )
   | FunctionCallArgument(
       {
         .
         "name": option(node),
-        "value": node
-      }
+        "value": node,
+      },
     )
   | FunctionCallExpression(
       {
         .
         "name": node,
-        "arguments": list(node)
-      }
+        "arguments": list(node),
+      },
     )
   | EnumCase(
       {
         .
         "name": node,
-        "value": option(node)
-      }
+        "parameters": option(typeAnnotation),
+        "value": option(node),
+      },
+    )
+  | OptionalBindingCondition(
+      {
+        .
+        "const": bool,
+        "pattern": pattern,
+        "init": node,
+      },
+    )
+  | CaseCondition(
+      {
+        .
+        "pattern": pattern,
+        "init": node,
+      },
     )
   | Empty
   | LineComment(string)
@@ -233,9 +300,78 @@ and node =
       {
         .
         "comment": string,
-        "line": node
-      }
+        "line": node,
+      },
     )
   | CodeBlock({. "statements": list(node)})
   | StatementListHelper(list(node))
   | TopLevelDeclaration({. "statements": list(node)});
+
+/* Ast builders for convenience, agnostic to the kind of data they use */
+module Builders = {
+  let memberExpression = (list: list(string)): node =>
+    switch (list) {
+    | [item] => SwiftIdentifier(item)
+    | _ => MemberExpression(list |> List.map(item => SwiftIdentifier(item)))
+    };
+
+  let functionCall =
+      (
+        name: list(string),
+        arguments: list((option(string), list(string))),
+      )
+      : node =>
+    FunctionCallExpression({
+      "name": memberExpression(name),
+      "arguments":
+        arguments
+        |> List.map(((label, expr)) =>
+             FunctionCallArgument({
+               "name":
+                 switch (label) {
+                 | Some(value) => Some(SwiftIdentifier(value))
+                 | None => None
+                 },
+               "value": memberExpression(expr),
+             })
+           ),
+    });
+
+  let privateVariableDeclaration =
+      (name: string, annotation: option(typeAnnotation), init: option(node)) =>
+    VariableDeclaration({
+      "modifiers": [AccessLevelModifier(PrivateModifier)],
+      "pattern":
+        IdentifierPattern({
+          "identifier": SwiftIdentifier(name),
+          "annotation": annotation,
+        }),
+      "init": init,
+      "block": None,
+    });
+
+  let publicVariableDeclaration =
+      (name: string, annotation: option(typeAnnotation), init: option(node)) =>
+    VariableDeclaration({
+      "modifiers": [AccessLevelModifier(PublicModifier)],
+      "pattern":
+        IdentifierPattern({
+          "identifier": SwiftIdentifier(name),
+          "annotation": annotation,
+        }),
+      "init": init,
+      "block": None,
+    });
+
+  let convenienceInit = (body: list(node)): node =>
+    InitializerDeclaration({
+      "modifiers": [
+        AccessLevelModifier(PublicModifier),
+        ConvenienceModifier,
+      ],
+      "parameters": [],
+      "failable": None,
+      "throws": false,
+      "body": body,
+    });
+};

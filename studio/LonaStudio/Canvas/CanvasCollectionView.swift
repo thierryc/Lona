@@ -14,8 +14,8 @@ private let CANVAS_IDENTIFIER = "canvas"
 struct CanvasCollectionOptions {
     var layout: RenderSurface.Layout
     var component: CSComponent
-    var selected: String?
     var onSelectLayer: (CSLayer) -> Void
+    var selectedLayerName: String?
 }
 
 class MatrixLayout: NSCollectionViewFlowLayout {
@@ -108,7 +108,7 @@ class MatrixLayout: NSCollectionViewFlowLayout {
     }
 }
 
-let CANVAS_INSET: CGFloat = 3
+let CANVAS_INSET: CGFloat = 10
 
 class CanvasCollectionView: NSView, NSCollectionViewDataSource, NSCollectionViewDelegate, NSCollectionViewDelegateFlowLayout {
 
@@ -145,12 +145,15 @@ class CanvasCollectionView: NSView, NSCollectionViewDataSource, NSCollectionView
 
         let component = options.component
         let canvas = computedCanvases[canvasIndex]
-        let caseEntry = options.component.computedCases(for: canvas)[caseIndex]
+        let computedCases = options.component.computedCases(for: canvas)
+
+        guard caseIndex < computedCases.count else { return NSSize.zero }
+
         let rootLayer = component.rootLayer
 
         let config = ComponentConfiguration(
             component: component,
-            arguments: caseEntry.value.objectValue,
+            arguments: computedCases[caseIndex].value.objectValue,
             canvas: canvas
         )
 
@@ -185,6 +188,8 @@ class CanvasCollectionView: NSView, NSCollectionViewDataSource, NSCollectionView
         let canvasIndex = indexPath[options.layout == .caseXcanvasY ? 0 : 1]
         let caseIndex = indexPath[options.layout == .caseXcanvasY ? 1 : 0]
 
+        guard caseIndex < computedCases.count, canvasIndex < computedCanvases.count else { return item }
+
         let component = options.component
         let canvas = computedCanvases[canvasIndex]
         let caseEntry = options.component.computedCases(for: canvas)[caseIndex]
@@ -196,7 +201,15 @@ class CanvasCollectionView: NSView, NSCollectionViewDataSource, NSCollectionView
             canvas: canvas
         )
 
-        let canvasView = CanvasView(canvas: canvas, rootLayer: rootLayer, config: config)
+        let canvasView = CanvasView(
+            canvas: canvas,
+            rootLayer: rootLayer,
+            config: config,
+            options: [
+                .renderCanvasShadow(true),
+                .onSelectLayer(options.onSelectLayer),
+                .selectedLayerName(options.selectedLayerName)
+            ])
 
         let canvasContainerView = NSView(frame: canvasView.bounds.insetBy(dx: -CANVAS_INSET, dy: -CANVAS_INSET).offsetBy(dx: CANVAS_INSET, dy: CANVAS_INSET))
         canvasContainerView.addSubview(canvasView)
@@ -262,16 +275,11 @@ class CanvasCollectionView: NSView, NSCollectionViewDataSource, NSCollectionView
         translatesAutoresizingMaskIntoConstraints = false
         wantsLayer = true
 
-        let visualEffectView = NSVisualEffectView(frame: NSRect.zero)
-        visualEffectView.material = .mediumLight
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
-
         let collectionView = NSCollectionView(frame: NSRect.zero)
         collectionView.collectionViewLayout = MatrixLayout(delegate: self)
         collectionView.delegate = self
         collectionView.dataSource = self
-        collectionView.backgroundColors = [NSColor.clear]
+        collectionView.backgroundColors = [NSColor.white.withAlphaComponent(0.5)]
         self.collectionView = collectionView
 
         let scrollView = CollectionScrollView()
@@ -287,8 +295,7 @@ class CanvasCollectionView: NSView, NSCollectionViewDataSource, NSCollectionView
 
         self.scrollView = scrollView
 
-        addSubviewStretched(subview: visualEffectView)
-        visualEffectView.addSubviewStretched(subview: scrollView)
+        addSubviewStretched(subview: scrollView)
 
         collectionView.register(CanvasItemViewController.self, forItemWithIdentifier: NSUserInterfaceItemIdentifier(rawValue: CANVAS_IDENTIFIER))
     }
